@@ -825,8 +825,8 @@ export default function Investigations() {
       autoTable(doc, {
         head: [
           [
-            t("common.lastName"),
             t("common.firstName"),
+            t("common.lastName"),
             t("common.department"),
             t("common.group"),
             t("investigations.gCode"),
@@ -1245,8 +1245,8 @@ export default function Investigations() {
                 <TableHeader>
                   <TableRow>
 
-                    <TableHead>{t("common.lastName")}</TableHead>
                     <TableHead>{t("common.firstName")}</TableHead>
+                    <TableHead>{t("common.lastName")}</TableHead>
                     <TableHead>{t("common.department")}</TableHead>
                     <TableHead>{t("investigations.gCode")}</TableHead>
                     <TableHead>{t("common.status")}</TableHead>
@@ -1275,9 +1275,9 @@ export default function Investigations() {
                         <TableRow key={item.employee.id}>
 
                           <TableCell className="font-medium">
-                            {lastName}
+                            {firstName}
                           </TableCell>
-                          <TableCell>{firstName}</TableCell>
+                          <TableCell>{lastName}</TableCell>
                           <TableCell>
                             {item.employee.departments?.name || "—"}
                           </TableCell>
