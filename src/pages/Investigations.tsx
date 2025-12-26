@@ -752,7 +752,7 @@ export default function Investigations() {
         }
 
         if (filterCheckUpType === "planned") {
-          return checkup.status === "open" || checkup.status === "planned";
+          return checkup.status === "planned";
         }
 
         return checkup.status === filterCheckUpType;
@@ -1280,13 +1280,12 @@ export default function Investigations() {
                           <TableCell>
                             <div className="flex flex-wrap gap-1">
                               {item.checkups.map((checkup: any) => (
-                                <Badge
+                                <span
                                   key={checkup.id}
-                                  variant="outline"
                                   className="text-xs"
                                 >
                                   {checkup.investigation_name || "—"}
-                                </Badge>
+                                </span>
                               ))}
                             </div>
                           </TableCell>
@@ -1350,7 +1349,7 @@ export default function Investigations() {
                     const matchesStatus = filterCheckUpType === "all" ||
                       checkup.status === filterCheckUpType ||
                       (filterCheckUpType === "completed" && checkup.status === "done") ||
-                      (filterCheckUpType === "planned" && (checkup.status === "open" || checkup.status === "planned"));
+                      (filterCheckUpType === "planned" && checkup.status === "planned");
                     return matchesSearch && matchesDepartment && matchesGroup && matchesStatus;
                   }).length === 0 ? (
                     <TableRow>
@@ -1372,7 +1371,7 @@ export default function Investigations() {
                         const matchesStatus = filterCheckUpType === "all" ||
                           checkup.status === filterCheckUpType ||
                           (filterCheckUpType === "completed" && checkup.status === "done") ||
-                          (filterCheckUpType === "planned" && (checkup.status === "open" || checkup.status === "planned"));
+                          (filterCheckUpType === "planned" && checkup.status === "planned");
                         return matchesSearch && matchesDepartment && matchesGroup && matchesStatus;
                       })
                       .map((checkup: any) => (
@@ -1382,9 +1381,7 @@ export default function Investigations() {
                             {checkup.employee?.full_name || "—"}
                           </TableCell>
                           <TableCell>
-                            <Badge variant="outline">
-                              {checkup.investigation_name || "—"}
-                            </Badge>
+                            {checkup.investigation_name || "—"}
                           </TableCell>
                           <TableCell>
                             {checkup.due_date
@@ -1486,8 +1483,7 @@ export default function Investigations() {
                           (filterCheckUpType === "completed" &&
                             checkup.status === "done") ||
                           (filterCheckUpType === "planned" &&
-                            (checkup.status === "open" ||
-                              checkup.status === "planned"));
+                            checkup.status === "planned");
 
                         return (
                           matchesSearch &&
@@ -1522,9 +1518,7 @@ export default function Investigations() {
                               {checkup.employee?.employee_number || "—"}
                             </TableCell>
                             <TableCell>
-                              <Badge variant="outline">
-                                {checkup.investigation_name || "—"}
-                              </Badge>
+                              {checkup.investigation_name || "—"}
                             </TableCell>
                             <TableCell>
                               {checkup.employee?.departments?.name || "—"}
