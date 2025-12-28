@@ -608,31 +608,31 @@ export default function Reports() {
 // Default layout for the dashboard grid
 const defaultLayouts = {
   lg: [
-    { i: "risk-assessments", x: 0, y: 0, w: 3, h: 3, minW: 2, minH: 2, static: false },
-    { i: "safety-audits", x: 3, y: 0, w: 3, h: 3, minW: 2, minH: 2, static: false },
-    { i: "incidents", x: 6, y: 0, w: 3, h: 3, minW: 2, minH: 2, static: false },
-    { i: "training-compliance", x: 9, y: 0, w: 3, h: 3, minW: 2, minH: 2, static: false },
-    { i: "incident-trends", x: 0, y: 3, w: 12, h: 6, minW: 6, minH: 4, static: false },
-    { i: "audit-completion", x: 0, y: 9, w: 6, h: 6, minW: 4, minH: 4, static: false },
-    { i: "task-completion", x: 6, y: 9, w: 6, h: 6, minW: 4, minH: 4, static: false },
+    { i: "risk-assessments", x: 0, y: 0, w: 3, h: 2, minW: 2, minH: 2, static: false },
+    { i: "safety-audits", x: 3, y: 0, w: 3, h: 2, minW: 2, minH: 2, static: false },
+    { i: "incidents", x: 6, y: 0, w: 3, h: 2, minW: 2, minH: 2, static: false },
+    { i: "training-compliance", x: 9, y: 0, w: 3, h: 2, minW: 2, minH: 2, static: false },
+    { i: "incident-trends", x: 0, y: 2, w: 12, h: 4, minW: 6, minH: 3, static: false },
+    { i: "audit-completion", x: 0, y: 6, w: 6, h: 3, minW: 4, minH: 2, static: false },
+    { i: "task-completion", x: 6, y: 6, w: 6, h: 3, minW: 4, minH: 2, static: false },
   ],
   md: [
-    { i: "risk-assessments", x: 0, y: 0, w: 5, h: 2, minW: 3, minH: 2, static: false },
-    { i: "safety-audits", x: 5, y: 0, w: 5, h: 2, minW: 3, minH: 2, static: false },
-    { i: "incidents", x: 0, y: 2, w: 5, h: 2, minW: 3, minH: 2, static: false },
-    { i: "training-compliance", x: 5, y: 2, w: 5, h: 2, minW: 3, minH: 2, static: false },
-    { i: "incident-trends", x: 0, y: 4, w: 10, h: 5, minW: 6, minH: 4, static: false },
-    { i: "audit-completion", x: 0, y: 9, w: 5, h: 4, minW: 4, minH: 3, static: false },
-    { i: "task-completion", x: 5, y: 9, w: 5, h: 4, minW: 4, minH: 3, static: false },
+    { i: "risk-assessments", x: 0, y: 0, w: 5, h: 2, minW: 2, minH: 2, static: false },
+    { i: "safety-audits", x: 5, y: 0, w: 5, h: 2, minW: 2, minH: 2, static: false },
+    { i: "incidents", x: 0, y: 2, w: 5, h: 2, minW: 2, minH: 2, static: false },
+    { i: "training-compliance", x: 5, y: 2, w: 5, h: 2, minW: 2, minH: 2, static: false },
+    { i: "incident-trends", x: 0, y: 4, w: 10, h: 4, minW: 6, minH: 3, static: false },
+    { i: "audit-completion", x: 0, y: 8, w: 5, h: 3, minW: 4, minH: 2, static: false },
+    { i: "task-completion", x: 5, y: 8, w: 5, h: 3, minW: 4, minH: 2, static: false },
   ],
   sm: [
-    { i: "risk-assessments", x: 0, y: 0, w: 6, h: 2, minW: 3, minH: 2, static: false },
-    { i: "safety-audits", x: 0, y: 2, w: 6, h: 2, minW: 3, minH: 2, static: false },
-    { i: "incidents", x: 0, y: 4, w: 6, h: 2, minW: 3, minH: 2, static: false },
-    { i: "training-compliance", x: 0, y: 6, w: 6, h: 2, minW: 3, minH: 2, static: false },
-    { i: "incident-trends", x: 0, y: 8, w: 6, h: 5, minW: 4, minH: 4, static: false },
-    { i: "audit-completion", x: 0, y: 13, w: 6, h: 4, minW: 3, minH: 3, static: false },
-    { i: "task-completion", x: 0, y: 17, w: 6, h: 4, minW: 3, minH: 3, static: false },
+    { i: "risk-assessments", x: 0, y: 0, w: 3, h: 2, minW: 2, minH: 2, static: false },
+    { i: "safety-audits", x: 3, y: 0, w: 3, h: 2, minW: 2, minH: 2, static: false },
+    { i: "incidents", x: 0, y: 2, w: 3, h: 2, minW: 2, minH: 2, static: false },
+    { i: "training-compliance", x: 3, y: 2, w: 3, h: 2, minW: 2, minH: 2, static: false },
+    { i: "incident-trends", x: 0, y: 4, w: 6, h: 4, minW: 4, minH: 3, static: false },
+    { i: "audit-completion", x: 0, y: 8, w: 6, h: 3, minW: 3, minH: 2, static: false },
+    { i: "task-completion", x: 0, y: 11, w: 6, h: 3, minW: 3, minH: 2, static: false },
   ],
 };
 
@@ -755,12 +755,12 @@ function OverviewSection({
         layouts={layouts}
         breakpoints={{ lg: 1200, md: 996, sm: 768 }}
         cols={{ lg: 12, md: 10, sm: 6 }}
-        rowHeight={80}
+        rowHeight={70}
         onLayoutChange={handleLayoutChange}
         draggableHandle=".drag-handle"
         isResizable={true}
         isDraggable={true}
-        margin={[16, 16]}
+        margin={[12, 12]}
         containerPadding={[0, 0]}
         compactType="vertical"
       >
@@ -847,84 +847,66 @@ function OverviewSection({
 
         {/* Audit Completion Card */}
         <div key="audit-completion">
-          <Card className="dashboard-grid-card border shadow-sm h-full">
+          <Card className="dashboard-grid-card border shadow-sm h-full overflow-hidden">
             <div className="drag-handle border-b">
               <GripVertical className="w-4 h-4 text-muted-foreground" />
             </div>
-            <CardHeader className="py-4 pb-3">
-              <CardTitle className="text-lg">Audit Completion</CardTitle>
-              <CardDescription>Safety audit metrics</CardDescription>
+            <CardHeader className="py-2 pb-1 px-4">
+              <CardTitle className="text-sm flex items-center gap-2">
+                <ClipboardCheck className="w-4 h-4 text-blue-600" />
+                Audit Completion
+              </CardTitle>
             </CardHeader>
-            <CardContent className="space-y-4 pb-4">
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-muted-foreground">Total Audits</span>
-                <Badge className="text-sm px-2.5 py-0.5">{stats.totalAudits}</Badge>
+            <CardContent className="flex-1 flex flex-col justify-center pb-3 pt-1 px-4">
+              <div className="flex items-center gap-3">
+                <div className="flex-1 text-center py-1.5 px-2 rounded-md bg-blue-50">
+                  <div className="text-lg font-bold text-blue-600">{stats.totalAudits}</div>
+                  <div className="text-[9px] text-blue-600/70">Total</div>
+                </div>
+                <div className="flex-1 text-center py-1.5 px-2 rounded-md bg-green-50">
+                  <div className="text-lg font-bold text-green-600">{stats.completedAudits}</div>
+                  <div className="text-[9px] text-green-600/70">Done</div>
+                </div>
+                <div className="flex-1 text-center">
+                  <div className="text-xl font-bold">
+                    {stats.totalAudits > 0 ? Math.round((stats.completedAudits / stats.totalAudits) * 100) : 0}%
+                  </div>
+                  <div className="text-[9px] text-muted-foreground">Rate</div>
+                </div>
               </div>
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-muted-foreground">Completed</span>
-                <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200 text-sm px-2.5 py-0.5">
-                  {stats.completedAudits}
-                </Badge>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-muted-foreground">Completion Rate</span>
-                <span className="text-xl font-bold">
-                  {stats.totalAudits > 0
-                    ? Math.round((stats.completedAudits / stats.totalAudits) * 100)
-                    : 0}
-                  %
-                </span>
-              </div>
-              <Progress
-                value={
-                  stats.totalAudits > 0
-                    ? (stats.completedAudits / stats.totalAudits) * 100
-                    : 0
-                }
-                className="h-2.5 mt-2"
-              />
             </CardContent>
           </Card>
         </div>
 
         {/* Task Completion Card */}
         <div key="task-completion">
-          <Card className="dashboard-grid-card border shadow-sm h-full">
+          <Card className="dashboard-grid-card border shadow-sm h-full overflow-hidden">
             <div className="drag-handle border-b">
               <GripVertical className="w-4 h-4 text-muted-foreground" />
             </div>
-            <CardHeader className="py-4 pb-3">
-              <CardTitle className="text-lg">Task Completion</CardTitle>
-              <CardDescription>Corrective action tracking</CardDescription>
+            <CardHeader className="py-2 pb-1 px-4">
+              <CardTitle className="text-sm flex items-center gap-2">
+                <ListChecks className="w-4 h-4 text-blue-600" />
+                Task Completion
+              </CardTitle>
             </CardHeader>
-            <CardContent className="space-y-4 pb-4">
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-muted-foreground">Total Tasks</span>
-                <Badge className="text-sm px-2.5 py-0.5">{stats.totalTasks}</Badge>
+            <CardContent className="flex-1 flex flex-col justify-center pb-3 pt-1 px-4">
+              <div className="flex items-center gap-3">
+                <div className="flex-1 text-center py-1.5 px-2 rounded-md bg-blue-50">
+                  <div className="text-lg font-bold text-blue-600">{stats.totalTasks}</div>
+                  <div className="text-[9px] text-blue-600/70">Total</div>
+                </div>
+                <div className="flex-1 text-center py-1.5 px-2 rounded-md bg-green-50">
+                  <div className="text-lg font-bold text-green-600">{stats.completedTasks}</div>
+                  <div className="text-[9px] text-green-600/70">Done</div>
+                </div>
+                <div className="flex-1 text-center">
+                  <div className="text-xl font-bold">
+                    {stats.totalTasks > 0 ? Math.round((stats.completedTasks / stats.totalTasks) * 100) : 0}%
+                  </div>
+                  <div className="text-[9px] text-muted-foreground">Rate</div>
+                </div>
               </div>
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-muted-foreground">Completed</span>
-                <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200 text-sm px-2.5 py-0.5">
-                  {stats.completedTasks}
-                </Badge>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-muted-foreground">Completion Rate</span>
-                <span className="text-xl font-bold">
-                  {stats.totalTasks > 0
-                    ? Math.round((stats.completedTasks / stats.totalTasks) * 100)
-                    : 0}
-                  %
-                </span>
-              </div>
-              <Progress
-                value={
-                  stats.totalTasks > 0
-                    ? (stats.completedTasks / stats.totalTasks) * 100
-                    : 0
-                }
-                className="h-2.5 mt-2"
-              />
             </CardContent>
           </Card>
         </div>
@@ -1083,12 +1065,12 @@ function DraggableGridSection({
         layouts={layoutsWithLocks}
         breakpoints={{ lg: 1200, md: 996, sm: 768 }}
         cols={{ lg: 12, md: 10, sm: 6 }}
-        rowHeight={80}
+        rowHeight={70}
         onLayoutChange={handleLayoutChange}
         draggableHandle=".drag-handle"
         isResizable={true}
         isDraggable={true}
-        margin={[16, 16]}
+        margin={[12, 12]}
         containerPadding={[0, 0]}
         compactType="vertical"
       >
@@ -1172,13 +1154,13 @@ function DraggableCard({
       <div className="drag-handle border-b cursor-grab active:cursor-grabbing flex-shrink-0">
         <GripVertical className="w-4 h-4 text-muted-foreground" />
       </div>
-      <CardContent className="flex-1 flex flex-col items-center justify-center text-center p-4 overflow-hidden">
-        <div className={`w-10 h-10 rounded-lg ${color} flex items-center justify-center flex-shrink-0 mb-3`}>
+      <CardContent className="flex-1 flex flex-col items-center justify-center text-center p-3 overflow-hidden">
+        <div className={`w-9 h-9 rounded-lg ${color} flex items-center justify-center flex-shrink-0 mb-2`}>
           {icon}
         </div>
-        <h3 className="font-medium text-foreground text-sm">{title}</h3>
-        <p className="text-muted-foreground text-xs mb-2">{subtitle}</p>
-        <p className="font-bold text-foreground text-2xl">{value}</p>
+        <h3 className="font-medium text-foreground text-sm leading-tight">{title}</h3>
+        <p className="text-muted-foreground text-xs mb-1">{subtitle}</p>
+        <p className="font-bold text-foreground text-xl">{value}</p>
       </CardContent>
     </Card>
   );
@@ -1263,12 +1245,12 @@ function RiskAssessmentsSection({ stats, chartData }: { stats: ReportStats; char
         layouts={layouts}
         breakpoints={{ lg: 1200, md: 996, sm: 768 }}
         cols={{ lg: 12, md: 10, sm: 6 }}
-        rowHeight={80}
+        rowHeight={70}
         onLayoutChange={handleLayoutChange}
         draggableHandle=".drag-handle"
         isResizable={true}
         isDraggable={true}
-        margin={[16, 16]}
+        margin={[12, 12]}
         containerPadding={[0, 0]}
         compactType="vertical"
       >
@@ -1336,12 +1318,12 @@ function AuditsSection({ stats, chartData }: { stats: ReportStats; chartData: an
         layouts={layouts}
         breakpoints={{ lg: 1200, md: 996, sm: 768 }}
         cols={{ lg: 12, md: 10, sm: 6 }}
-        rowHeight={80}
+        rowHeight={70}
         onLayoutChange={handleLayoutChange}
         draggableHandle=".drag-handle"
         isResizable={true}
         isDraggable={true}
-        margin={[16, 16]}
+        margin={[12, 12]}
         containerPadding={[0, 0]}
         compactType="vertical"
       >
@@ -1420,12 +1402,12 @@ function IncidentsSection({ stats, chartData }: { stats: ReportStats; chartData:
         layouts={layouts}
         breakpoints={{ lg: 1200, md: 996, sm: 768 }}
         cols={{ lg: 12, md: 10, sm: 6 }}
-        rowHeight={80}
+        rowHeight={70}
         onLayoutChange={handleLayoutChange}
         draggableHandle=".drag-handle"
         isResizable={true}
         isDraggable={true}
-        margin={[16, 16]}
+        margin={[12, 12]}
         containerPadding={[0, 0]}
         compactType="vertical"
       >
@@ -1520,12 +1502,12 @@ function TrainingsSection({
         layouts={layouts}
         breakpoints={{ lg: 1200, md: 996, sm: 768 }}
         cols={{ lg: 12, md: 10, sm: 6 }}
-        rowHeight={80}
+        rowHeight={70}
         onLayoutChange={handleLayoutChange}
         draggableHandle=".drag-handle"
         isResizable={true}
         isDraggable={true}
-        margin={[16, 16]}
+        margin={[12, 12]}
         containerPadding={[0, 0]}
         compactType="vertical"
       >
@@ -1670,12 +1652,12 @@ function MeasuresSection({ stats, chartData }: { stats: ReportStats; chartData: 
         layouts={layouts}
         breakpoints={{ lg: 1200, md: 996, sm: 768 }}
         cols={{ lg: 12, md: 10, sm: 6 }}
-        rowHeight={80}
+        rowHeight={70}
         onLayoutChange={handleLayoutChange}
         draggableHandle=".drag-handle"
         isResizable={true}
         isDraggable={true}
-        margin={[16, 16]}
+        margin={[12, 12]}
         containerPadding={[0, 0]}
         compactType="vertical"
       >
@@ -1762,12 +1744,12 @@ function TasksSection({ stats, chartData }: { stats: ReportStats; chartData: any
         layouts={layouts}
         breakpoints={{ lg: 1200, md: 996, sm: 768 }}
         cols={{ lg: 12, md: 10, sm: 6 }}
-        rowHeight={80}
+        rowHeight={70}
         onLayoutChange={handleLayoutChange}
         draggableHandle=".drag-handle"
         isResizable={true}
         isDraggable={true}
-        margin={[16, 16]}
+        margin={[12, 12]}
         containerPadding={[0, 0]}
         compactType="vertical"
       >
@@ -1844,12 +1826,12 @@ function CheckupsSection({ stats }: { stats: ReportStats }) {
         layouts={layouts}
         breakpoints={{ lg: 1200, md: 996, sm: 768 }}
         cols={{ lg: 12, md: 10, sm: 6 }}
-        rowHeight={80}
+        rowHeight={70}
         onLayoutChange={handleLayoutChange}
         draggableHandle=".drag-handle"
         isResizable={true}
         isDraggable={true}
-        margin={[16, 16]}
+        margin={[12, 12]}
         containerPadding={[0, 0]}
         compactType="vertical"
       >

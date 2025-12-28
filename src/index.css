@@ -281,7 +281,7 @@ iframe[src*="cloudinary"] {
 
 .dashboard-grid-card .drag-handle {
   cursor: grab;
-  padding: 6px;
+  padding: 4px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -289,7 +289,7 @@ iframe[src*="cloudinary"] {
   transition: all 200ms ease;
   background: transparent;
   flex-shrink: 0;
-  min-height: 32px;
+  min-height: 24px;
 }
 
 .dashboard-grid-card:hover .drag-handle {
@@ -342,4 +342,50 @@ iframe[src*="cloudinary"] {
 .react-grid-item>div {
   height: 100%;
   width: 100%;
+}
+
+/* Responsive container query scaling for cards */
+@container card (max-width: 300px) {
+  .dashboard-grid-card .text-2xl {
+    font-size: 1.25rem;
+  }
+  
+  .dashboard-grid-card .text-lg {
+    font-size: 0.95rem;
+  }
+  
+  .dashboard-grid-card .text-base {
+    font-size: 0.875rem;
+  }
+  
+  .dashboard-grid-card .text-sm {
+    font-size: 0.75rem;
+  }
+  
+  .dashboard-grid-card .p-3 {
+    padding: 0.5rem;
+  }
+  
+  .dashboard-grid-card .w-8.h-8 {
+    width: 1.5rem;
+    height: 1.5rem;
+  }
+}
+
+@container card (max-width: 250px) {
+  .dashboard-grid-card .text-2xl {
+    font-size: 1.125rem;
+  }
+  
+  .dashboard-grid-card .text-lg {
+    font-size: 0.875rem;
+  }
+  
+  .dashboard-grid-card .gap-3 {
+    gap: 0.5rem;
+  }
+  
+  .dashboard-grid-card .space-y-4 > * + * {
+    margin-top: 0.75rem;
+  }
 }
