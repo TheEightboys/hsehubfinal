@@ -89,14 +89,15 @@ serve(async (req) => {
         </head>
         <body>
           <div class="container">
-            <h1>You've been invited to HSE Hub</h1>
+            <h1>You've Been Invited to Join HSE Hub</h1>
             <p>Hello ${name},</p>
-            <p>Here are your notes which are belonging to you:</p>
+            <p>You have been invited to join your organization's HSE Hub platform. HSE Hub helps manage health, safety, and environmental compliance for your team.</p>
+            <p>Click the button below to accept the invitation and set up your account:</p>
             <p>
-              <a href="${inviteUrl}" class="button">View Your Notes</a>
+              <a href="${inviteUrl}" class="button">Accept Invitation</a>
             </p>
-            <p>This link will expire in 30 days.</p>
-            <p>If you didn't expect this invitation, please ignore this email.</p>
+            <p>This invitation link will expire in 30 days.</p>
+            <p>If you didn't expect this invitation or have any questions, please contact your administrator.</p>
             <div class="footer">
               <p>This is an automated message from HSE Hub.</p>
             </div>
@@ -114,8 +115,8 @@ serve(async (req) => {
       },
       body: JSON.stringify({
         sender: {
-          name: "HSE Hub",
-          email: "noreply@hse-hub.com", // This will work with Brevo's default sender
+          name: "Graffity",
+          email: "freelancecomm9@gmail.com",
         },
         to: [
           {
@@ -123,7 +124,7 @@ serve(async (req) => {
             name: name,
           },
         ],
-        subject: "Your HSE Hub Notes",
+        subject: "You've Been Invited to Join HSE Hub",
         htmlContent: emailHtml,
       }),
     });
