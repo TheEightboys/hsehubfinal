@@ -261,6 +261,7 @@ export default function LessonViewer() {
                     <video
                       src={lesson.content_url}
                       controls
+                      preload="auto"
                       className="w-full h-full"
                     >
                       Your browser does not support the video tag.
@@ -273,10 +274,47 @@ export default function LessonViewer() {
             {/* PDF Content */}
             {lesson.type === "pdf" && lesson.content_url && (
               <div className="w-full space-y-4">
-                {/* Download button */}
-                <div className="flex justify-end">
+                {/* Download/View buttons */}
+                <div className="flex justify-end gap-2">
                   <Button
                     variant="outline"
+                    size="sm"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      // Force download - for Cloudinary URLs, add fl_attachment flag
+                      let downloadUrl = lesson.content_url!;
+                      if (downloadUrl.includes('cloudinary.com')) {
+                        // Handle different Cloudinary URL patterns (raw/upload, image/upload, auto/upload)
+                        downloadUrl = downloadUrl.replace(
+                          /\/(raw|image|video|auto)\/upload\//,
+                          '/$1/upload/fl_attachment/'
+                        );
+                      }
+                      // Use fetch to download as blob for better cross-origin handling
+                      fetch(downloadUrl)
+                        .then(response => response.blob())
+                        .then(blob => {
+                          const url = window.URL.createObjectURL(blob);
+                          const link = document.createElement('a');
+                          link.href = url;
+                          link.download = lesson.name + '.pdf';
+                          document.body.appendChild(link);
+                          link.click();
+                          document.body.removeChild(link);
+                          window.URL.revokeObjectURL(url);
+                        })
+                        .catch(() => {
+                          // Fallback: open in new tab
+                          window.open(lesson.content_url!, '_blank', 'noopener,noreferrer');
+                        });
+                    }}
+                  >
+                    <FileText className="w-4 h-4 mr-2" />
+                    Download PDF
+                  </Button>
+                  <Button
+                    variant="default"
                     size="sm"
                     onClick={(e) => {
                       e.preventDefault();
@@ -284,19 +322,26 @@ export default function LessonViewer() {
                       window.open(lesson.content_url!, '_blank', 'noopener,noreferrer');
                     }}
                   >
-                    <FileText className="w-4 h-4 mr-2" />
-                    View/Download PDF
+                    Open in New Tab
                   </Button>
                 </div>
-                {/* PDF iframe embed using Google Docs Viewer */}
-                <div className="w-full bg-gray-100 rounded-lg overflow-hidden border shadow-sm" style={{ height: '80vh', minHeight: '600px' }}>
-                  <iframe
-                    src={`https://docs.google.com/gview?url=${encodeURIComponent(lesson.content_url)}&embedded=true`}
+                {/* PDF embed - using object tag for better rendering */}
+                <object
+                  data={lesson.content_url}
+                  type="application/pdf"
+                  className="w-full rounded-lg border-2 border-gray-300"
+                  style={{ height: '800px', minHeight: '600px' }}
+                >
+                  {/* Fallback for browsers that don't support object tag for PDFs */}
+                  <embed
+                    src={lesson.content_url}
+                    type="application/pdf"
                     className="w-full h-full"
-                    title={lesson.name}
-                    style={{ border: 'none' }}
                   />
-                </div>
+                </object>
+                <p className="text-xs text-muted-foreground text-center">
+                  If the PDF doesn't display correctly, use the "Open in New Tab" button above to view it in full screen
+                </p>
               </div>
             )}
 
