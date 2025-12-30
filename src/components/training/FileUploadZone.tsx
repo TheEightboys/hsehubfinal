@@ -181,7 +181,7 @@ export default function FileUploadZone({
 
         {lessonType === "video_audio" && (
           <div className="mt-4 rounded-lg overflow-hidden bg-black aspect-video">
-            <video src={currentFileUrl} controls className="w-full h-full object-contain" />
+            <video src={currentFileUrl} controls preload="metadata" className="w-full h-full object-contain" />
           </div>
         )}
 

@@ -261,6 +261,7 @@ export default function LessonViewer() {
                     <video
                       src={lesson.content_url}
                       controls
+                      preload="auto"
                       className="w-full h-full"
                     >
                       Your browser does not support the video tag.
