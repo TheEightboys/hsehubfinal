@@ -293,7 +293,7 @@ export default function LessonEditor() {
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
             <Card>
               <CardHeader>
-                <CardTitle>{t("training.videoAudioLesson")}</CardTitle>
+                <CardTitle>{t("training.lessonDetails")}</CardTitle>
                 <p className="text-sm text-muted-foreground">
                   {t("training.learnMoreEditor")}
                 </p>
@@ -397,12 +397,76 @@ export default function LessonEditor() {
                 {/* Content based on type */}
                 {form.watch("type") === "video_audio" && (
                   <div className="space-y-4">
-                    <Label>{t("training.videoAudioNote")}</Label>
-                    <p className="text-sm text-muted-foreground mb-4">
-                      {t("training.videoAudioFormats")}
-                    </p>
+                    {/* Add Video Link */}
+                    <FormField
+                      control={form.control}
+                      name="content_url"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Video Link (YouTube or direct URL)</FormLabel>
+                          <FormControl>
+                            <Input
+                              placeholder="https://youtube.com/watch?v=..."
+                              value={field.value || ""}
+                              onChange={field.onChange}
+                              type="url"
+                            />
+                          </FormControl>
+                          <p className="text-xs text-muted-foreground">
+                            Paste a YouTube or direct video/audio file URL. YouTube links will be embedded automatically.
+                          </p>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
 
-                    {/* Option 1: Upload Video/Audio */}
+                    {/* Video Preview for YouTube links only - Cloudinary uploads show preview in FileUploadZone */}
+                    {form.watch("content_url") && !form.watch("content_url")?.includes('cloudinary.com') && (
+                      <div className="mt-4 p-4 border rounded-lg bg-muted/30">
+                        <div className="flex items-center justify-between mb-3">
+                          <Label className="text-sm font-medium">Preview</Label>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => form.setValue("content_url", "")}
+                            className="text-muted-foreground hover:text-destructive"
+                          >
+                            <X className="w-4 h-4 mr-1" />
+                            Clear
+                          </Button>
+                        </div>
+                        {(form.watch("content_url")?.includes('youtube.com') || 
+                          form.watch("content_url")?.includes('youtu.be')) ? (
+                          <div className="aspect-video bg-black rounded-lg overflow-hidden">
+                            <iframe
+                              src={
+                                form.watch("content_url")?.includes('youtube.com') 
+                                  ? form.watch("content_url")?.replace('watch?v=', 'embed/')
+                                  : form.watch("content_url")?.replace('youtu.be/', 'youtube.com/embed/')
+                              }
+                              className="w-full h-full"
+                              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                              allowFullScreen
+                              title="Video Preview"
+                            />
+                          </div>
+                        ) : (
+                          <div className="aspect-video bg-muted rounded-lg flex items-center justify-center">
+                            <p className="text-sm text-muted-foreground">Video URL entered</p>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Divider */}
+                    <div className="flex items-center gap-2 py-2">
+                      <div className="flex-1 h-px bg-border" />
+                      <span className="text-sm text-muted-foreground px-2">OR upload a file</span>
+                      <div className="flex-1 h-px bg-border" />
+                    </div>
+
+                    {/* Option 2: Upload Video/Audio */}
                     <FormField
                       control={form.control}
                       name="content_url"
@@ -411,7 +475,7 @@ export default function LessonEditor() {
                           <FormControl>
                             <FileUploadZone
                               lessonType="video_audio"
-                              currentFileUrl={field.value}
+                              currentFileUrl={field.value?.includes('cloudinary.com') ? field.value : undefined}
                               onUploadComplete={field.onChange}
                             />
                           </FormControl>
@@ -420,47 +484,6 @@ export default function LessonEditor() {
                       )}
                     />
 
-                    {/* Option 2: Add Video Link */}
-                    {!form.watch("content_url") && (
-                      <div className="space-y-2">
-                        <div className="flex items-center gap-2">
-                          <div className="flex-1 h-px bg-border" />
-                          <span className="text-sm text-muted-foreground px-2">OR</span>
-                          <div className="flex-1 h-px bg-border" />
-                        </div>
-                        <FormField
-                          control={form.control}
-                          name="content_url"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Video/Audio Link</FormLabel>
-                              <FormControl>
-                                <Input
-                                  placeholder="https://youtube.com/watch?v=... or direct video URL"
-                                  {...field}
-                                  type="url"
-                                />
-                              </FormControl>
-                              <p className="text-xs text-muted-foreground">
-                                Paste a YouTube, Vimeo, or direct video/audio file URL
-                              </p>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-                      </div>
-                    )}
-
-                    <div className="flex gap-2">
-                      <Button type="button" variant="outline" className="flex-1">
-                        <VideoIcon className="w-4 h-4 mr-2" />
-                        {t("training.recordVideo")}
-                      </Button>
-                      <Button type="button" variant="outline" className="flex-1">
-                        <UploadIcon className="w-4 h-4 mr-2" />
-                        {t("training.importVideo")}
-                      </Button>
-                    </div>
                   </div>
                 )}
 

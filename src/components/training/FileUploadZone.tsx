@@ -49,10 +49,12 @@ export default function FileUploadZone({
       return;
     }
 
-    // Use 'video' for video/audio, 'auto' for PDFs and others (raw causes access issues)
+    // Use 'video' for video/audio, 'auto' for PDFs
+    // 'auto' lets Cloudinary decide - PDFs become 'image' type which is publicly accessible
+    // 'raw' requires authentication and causes 401 errors
     const resourceType = lessonType === "video_audio" 
       ? "video" 
-      : "auto";
+      : "auto";  // 'auto' makes PDFs publicly accessible
         
     const allowedFormats =
       lessonType === "video_audio"
@@ -72,6 +74,8 @@ export default function FileUploadZone({
         maxFileSize: maxFileSizeMB * 1024 * 1024,
         folder: "hse-hub-lessons",
         tags: ["lesson", lessonType],
+        // Ensure public access for all uploaded files
+        publicId: undefined, // Let Cloudinary generate the public ID
         styles: {
           palette: {
             window: "#FFFFFF",
@@ -92,9 +96,9 @@ export default function FileUploadZone({
       },
       (error: any, result: any) => {
         if (!error && result && result.event === "success") {
-          // For PDFs uploaded as 'raw', use the secure_url directly
+          // Use the secure_url directly
           const fileUrl = result.info.secure_url;
-          console.log("Uploaded file URL:", fileUrl);
+          console.log("Uploaded file URL:", fileUrl, "Resource type:", result.info.resource_type);
           onUploadComplete(fileUrl);
           toast({
             title: "Upload Successful",
@@ -177,18 +181,29 @@ export default function FileUploadZone({
 
         {lessonType === "video_audio" && (
           <div className="mt-4 rounded-lg overflow-hidden bg-black aspect-video">
-            <video src={currentFileUrl} controls className="w-full h-full object-contain" />
+            <video src={currentFileUrl} controls preload="metadata" className="w-full h-full object-contain" />
           </div>
         )}
 
         {lessonType === "pdf" && (
-          <div className="mt-4 rounded-lg overflow-hidden border bg-gray-100" style={{ height: '400px' }}>
-            <iframe
-              src={`https://docs.google.com/gview?url=${encodeURIComponent(currentFileUrl)}&embedded=true`}
-              className="w-full h-full"
-              title="PDF Preview"
-              style={{ border: 'none' }}
-            />
+          <div className="mt-4 space-y-3">
+            {/* PDF embed - using object tag for better rendering */}
+            <object
+              data={currentFileUrl}
+              type="application/pdf"
+              className="w-full rounded-lg border-2 border-gray-300"
+              style={{ height: '500px' }}
+            >
+              {/* Fallback for browsers that don't support object tag for PDFs */}
+              <embed
+                src={currentFileUrl}
+                type="application/pdf"
+                className="w-full h-full"
+              />
+            </object>
+            <p className="text-xs text-muted-foreground text-center">
+              If preview doesn't load, use the View button above to open the PDF
+            </p>
           </div>
         )}
       </div>
