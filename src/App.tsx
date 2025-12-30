@@ -34,6 +34,7 @@ import SuperAdminCompanies from "./pages/SuperAdmin/Companies";
 import AuthDebug from "./pages/AuthDebug";
 import NotFound from "./pages/NotFound";
 import PublicNotes from "./pages/PublicNotes";
+import AcceptInvitation from "./pages/AcceptInvitation";
 import MainLayout from "./components/MainLayout";
 
 const queryClient = new QueryClient();
@@ -250,6 +251,7 @@ const App = () => (
 
               {/* Public Routes (no authentication required) */}
               <Route path="/notes/:token" element={<PublicNotes />} />
+              <Route path="/invite/:token" element={<AcceptInvitation />} />
 
               {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
               <Route path="*" element={<NotFound />} />
