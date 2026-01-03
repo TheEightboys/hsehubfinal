@@ -17,6 +17,10 @@ import {
   ChevronDown,
   Building2,
   Globe,
+  Package,
+  Puzzle,
+  LayoutDashboard,
+  BarChart3,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -112,7 +116,35 @@ export default function MainLayout({ children }: Props) {
                   <div key={i} className="h-9 bg-gray-100 dark:bg-gray-800 rounded-lg" />
                 ))}
               </div>
+            ) : userRole === "super_admin" ? (
+              /* Super Admin Only Menu - No company options */
+              <div className="space-y-0.5">
+                <p className="px-3 py-2 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                  Super Admin
+                </p>
+                <Link to="/super-admin/dashboard" className={getLinkClasses("/super-admin/dashboard")}>
+                  <LayoutDashboard className="w-4 h-4" />
+                  <span>Dashboard</span>
+                </Link>
+                <Link to="/super-admin/companies" className={getLinkClasses("/super-admin/companies")}>
+                  <Building2 className="w-4 h-4" />
+                  <span>Companies</span>
+                </Link>
+                <Link to="/super-admin/subscriptions" className={getLinkClasses("/super-admin/subscriptions")}>
+                  <Package className="w-4 h-4" />
+                  <span>Subscriptions</span>
+                </Link>
+                <Link to="/super-admin/addons" className={getLinkClasses("/super-admin/addons")}>
+                  <Puzzle className="w-4 h-4" />
+                  <span>Add-ons</span>
+                </Link>
+                <Link to="/super-admin/analytics" className={getLinkClasses("/super-admin/analytics")}>
+                  <BarChart3 className="w-4 h-4" />
+                  <span>Analytics</span>
+                </Link>
+              </div>
             ) : (
+              /* Regular Company User Menu */
               <>
                 {hasPermission("dashboard") && (
                   <Link to="/dashboard" className={getLinkClasses("/dashboard")}>

@@ -32,11 +32,16 @@ import Reports from "./pages/Reports";
 import CompanyRegistration from "./pages/CompanyRegistration";
 import SuperAdminDashboard from "./pages/SuperAdmin/Dashboard";
 import SuperAdminCompanies from "./pages/SuperAdmin/Companies";
+import SuperAdminSubscriptions from "./pages/SuperAdmin/Subscriptions";
+import SuperAdminAddons from "./pages/SuperAdmin/Addons";
+import SuperAdminAnalytics from "./pages/SuperAdmin/Analytics";
+import SuperAdminPinVerification from "./pages/SuperAdmin/PinVerification";
 import AuthDebug from "./pages/AuthDebug";
 import NotFound from "./pages/NotFound";
 import PublicNotes from "./pages/PublicNotes";
 import AcceptInvitation from "./pages/AcceptInvitation";
 import MainLayout from "./components/MainLayout";
+import SuperAdminRoute from "./components/SuperAdminRoute";
 
 const queryClient = new QueryClient();
 
@@ -54,21 +59,65 @@ const App = () => (
               <Route path="/register" element={<CompanyRegistration />} />
               <Route path="/auth-debug" element={<AuthDebug />} />
 
-              {/* Super Admin Pages */}
+              {/* Super Admin PIN Verification */}
+              <Route
+                path="/super-admin/verify"
+                element={
+                  <ProtectedRoute requiredRole="super_admin">
+                    <SuperAdminPinVerification />
+                  </ProtectedRoute>
+                }
+              />
+
+              {/* Super Admin Pages - Protected with PIN */}
               <Route
                 path="/super-admin/dashboard"
                 element={
-                  <MainLayout>
-                    <SuperAdminDashboard />
-                  </MainLayout>
+                  <SuperAdminRoute>
+                    <MainLayout>
+                      <SuperAdminDashboard />
+                    </MainLayout>
+                  </SuperAdminRoute>
                 }
               />
               <Route
                 path="/super-admin/companies"
                 element={
-                  <MainLayout>
-                    <SuperAdminCompanies />
-                  </MainLayout>
+                  <SuperAdminRoute>
+                    <MainLayout>
+                      <SuperAdminCompanies />
+                    </MainLayout>
+                  </SuperAdminRoute>
+                }
+              />
+              <Route
+                path="/super-admin/subscriptions"
+                element={
+                  <SuperAdminRoute>
+                    <MainLayout>
+                      <SuperAdminSubscriptions />
+                    </MainLayout>
+                  </SuperAdminRoute>
+                }
+              />
+              <Route
+                path="/super-admin/addons"
+                element={
+                  <SuperAdminRoute>
+                    <MainLayout>
+                      <SuperAdminAddons />
+                    </MainLayout>
+                  </SuperAdminRoute>
+                }
+              />
+              <Route
+                path="/super-admin/analytics"
+                element={
+                  <SuperAdminRoute>
+                    <MainLayout>
+                      <SuperAdminAnalytics />
+                    </MainLayout>
+                  </SuperAdminRoute>
                 }
               />
 
