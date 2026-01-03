@@ -7,13 +7,15 @@ import { useToast } from "@/hooks/use-toast";
 interface ProtectedRouteProps {
   children: ReactNode;
   requiredPermission?: keyof Permissions;
+  requiredRole?: 'super_admin' | 'company_admin' | 'employee';
 }
 
 export default function ProtectedRoute({ 
   children, 
-  requiredPermission 
+  requiredPermission,
+  requiredRole
 }: ProtectedRouteProps) {
-  const { user, loading: authLoading } = useAuth();
+  const { user, loading: authLoading, userRole } = useAuth();
   const { permissions, loading: permissionsLoading, canAccessRoute, hasPermission } = usePermissions();
   const navigate = useNavigate();
   const location = useLocation();
@@ -32,6 +34,19 @@ export default function ProtectedRoute({
 
     // Check permission
     let hasAccess = true;
+
+    // Check role requirement first
+    if (requiredRole) {
+      if (userRole !== requiredRole) {
+        toast({
+          title: "Access Denied",
+          description: `This page requires ${requiredRole.replace('_', ' ')} role.`,
+          variant: "destructive",
+        });
+        navigate("/dashboard", { replace: true });
+        return;
+      }
+    }
 
     if (requiredPermission) {
       // Explicit permission requirement
@@ -52,7 +67,9 @@ export default function ProtectedRoute({
   }, [
     loading,
     user,
+    userRole,
     requiredPermission,
+    requiredRole,
     permissions,
     navigate,
     location.pathname,
@@ -75,6 +92,12 @@ export default function ProtectedRoute({
     return null;
   }
 
+  
+  // Check role requirement
+  if (requiredRole && userRole !== requiredRole) {
+    return null;
+  }
+  
   // Check access
   let hasAccess = true;
   if (requiredPermission) {

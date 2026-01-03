@@ -57,12 +57,14 @@ const App = () => (
               <Route path="/register" element={<CompanyRegistration />} />
               <Route path="/auth-debug" element={<AuthDebug />} />
 
-              {/* Super Admin Pages */}
+              {/* Super Admin Pages - Protected */}
               <Route
                 path="/super-admin/dashboard"
                 element={
                   <MainLayout>
-                    <SuperAdminDashboard />
+                    <ProtectedRoute requiredRole="super_admin">
+                      <SuperAdminDashboard />
+                    </ProtectedRoute>
                   </MainLayout>
                 }
               />
@@ -70,7 +72,9 @@ const App = () => (
                 path="/super-admin/companies"
                 element={
                   <MainLayout>
-                    <SuperAdminCompanies />
+                    <ProtectedRoute requiredRole="super_admin">
+                      <SuperAdminCompanies />
+                    </ProtectedRoute>
                   </MainLayout>
                 }
               />
@@ -78,7 +82,9 @@ const App = () => (
                 path="/super-admin/subscriptions"
                 element={
                   <MainLayout>
-                    <SuperAdminSubscriptions />
+                    <ProtectedRoute requiredRole="super_admin">
+                      <SuperAdminSubscriptions />
+                    </ProtectedRoute>
                   </MainLayout>
                 }
               />
@@ -86,7 +92,9 @@ const App = () => (
                 path="/super-admin/addons"
                 element={
                   <MainLayout>
-                    <SuperAdminAddons />
+                    <ProtectedRoute requiredRole="super_admin">
+                      <SuperAdminAddons />
+                    </ProtectedRoute>
                   </MainLayout>
                 }
               />
@@ -94,7 +102,9 @@ const App = () => (
                 path="/super-admin/analytics"
                 element={
                   <MainLayout>
-                    <SuperAdminAnalytics />
+                    <ProtectedRoute requiredRole="super_admin">
+                      <SuperAdminAnalytics />
+                    </ProtectedRoute>
                   </MainLayout>
                 }
               />
