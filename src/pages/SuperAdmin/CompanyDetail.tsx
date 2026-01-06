@@ -36,6 +36,8 @@ import {
     Ban,
     CheckCircle,
     Clock,
+    FileEdit,
+    Key,
 } from "lucide-react";
 import {
     Dialog,
@@ -47,6 +49,7 @@ import {
 } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
 
 interface Company {
     id: string;
@@ -107,6 +110,19 @@ export default function CompanyDetail() {
 
     const [blockDialogOpen, setBlockDialogOpen] = useState(false);
     const [blockReason, setBlockReason] = useState("");
+
+    const [extendTrialDialogOpen, setExtendTrialDialogOpen] = useState(false);
+    const [trialExtensionDays, setTrialExtensionDays] = useState("30");
+
+    const [resetPasswordDialogOpen, setResetPasswordDialogOpen] = useState(false);
+    const [selectedUserForReset, setSelectedUserForReset] = useState<CompanyUser | null>(null);
+    const [newPassword, setNewPassword] = useState("");
+
+    const [invoiceCorrectionDialogOpen, setInvoiceCorrectionDialogOpen] = useState(false);
+    const [correctionReason, setCorrectionReason] = useState("");
+    const [correctionAmount, setCorrectionAmount] = useState("");
+
+
 
     useEffect(() => {
         if (!loading && (!user || userRole !== "super_admin")) {
@@ -328,6 +344,171 @@ export default function CompanyDetail() {
         }
     };
 
+    const handleExtendTrial = async () => {
+        const days = parseInt(trialExtensionDays);
+        if (isNaN(days) || days <= 0) {
+            toast({
+                title: "Error",
+                description: "Please enter a valid number of days",
+                variant: "destructive",
+            });
+            return;
+        }
+
+        try {
+            // Calculate new trial end date
+            const currentTrialEnd = company?.trial_ends_at
+                ? new Date(company.trial_ends_at)
+                : new Date();
+
+            const newTrialEnd = new Date(currentTrialEnd);
+            newTrialEnd.setDate(newTrialEnd.getDate() + days);
+
+            const { error } = await supabase
+                .from("companies")
+                .update({
+                    trial_ends_at: newTrialEnd.toISOString(),
+                    subscription_status: "trial",
+                })
+                .eq("id", id);
+
+            if (error) throw error;
+
+            // Create audit log
+            await supabase.rpc("create_audit_log", {
+                p_action_type: "extend_trial",
+                p_target_type: "company",
+                p_target_id: id,
+                p_target_name: company?.name || "",
+                p_details: {
+                    days_extended: days,
+                    new_trial_end: newTrialEnd.toISOString()
+                },
+                p_company_id: id,
+            });
+
+            toast({
+                title: "Success",
+                description: `Trial extended by ${days} days`,
+            });
+
+            setExtendTrialDialogOpen(false);
+            setTrialExtensionDays("30");
+            fetchCompanyData();
+        } catch (error: any) {
+            toast({
+                title: "Error",
+                description: error.message,
+                variant: "destructive",
+            });
+        }
+    };
+
+    const handleResetPassword = async () => {
+        if (!selectedUserForReset) return;
+
+        if (!newPassword || newPassword.length < 8) {
+            toast({
+                title: "Error",
+                description: "Password must be at least 8 characters",
+                variant: "destructive",
+            });
+            return;
+        }
+
+        try {
+            // Update user password in Supabase auth
+            const { error } = await supabase.auth.admin.updateUserById(
+                selectedUserForReset.id,
+                { password: newPassword }
+            );
+
+            if (error) throw error;
+
+            // Create audit log
+            await supabase.rpc("create_audit_log", {
+                p_action_type: "reset_password",
+                p_target_type: "user",
+                p_target_id: selectedUserForReset.id,
+                p_target_name: selectedUserForReset.email,
+                p_details: {
+                    reset_by: "super_admin",
+                    user_name: selectedUserForReset.full_name,
+                },
+                p_company_id: id,
+            });
+
+            toast({
+                title: "Success",
+                description: `Password reset for ${selectedUserForReset.email}`,
+            });
+
+            setResetPasswordDialogOpen(false);
+            setSelectedUserForReset(null);
+            setNewPassword("");
+        } catch (error: any) {
+            toast({
+                title: "Error",
+                description: error.message,
+                variant: "destructive",
+            });
+        }
+    };
+
+    const handleInvoiceCorrection = async () => {
+        if (!correctionReason.trim() || !correctionAmount.trim()) {
+            toast({
+                title: "Error",
+                description: "Please provide both reason and amount",
+                variant: "destructive",
+            });
+            return;
+        }
+
+        const amount = parseFloat(correctionAmount);
+        if (isNaN(amount)) {
+            toast({
+                title: "Error",
+                description: "Please enter a valid amount",
+                variant: "destructive",
+            });
+            return;
+        }
+
+        try {
+            // Create audit log for invoice correction
+            await supabase.rpc("create_audit_log", {
+                p_action_type: "invoice_correction",
+                p_target_type: "company",
+                p_target_id: id,
+                p_target_name: company?.name || "",
+                p_details: {
+                    reason: correctionReason,
+                    amount: amount,
+                    corrected_by: user?.email,
+                },
+                p_company_id: id,
+            });
+
+            toast({
+                title: "Success",
+                description: "Invoice correction logged successfully",
+            });
+
+            setInvoiceCorrectionDialogOpen(false);
+            setCorrectionReason("");
+            setCorrectionAmount("");
+            fetchAuditLogs(); // Refresh audit logs
+        } catch (error: any) {
+            toast({
+                title: "Error",
+                description: error.message,
+                variant: "destructive",
+            });
+        }
+    };
+
+
     if (loading || loadingData) {
         return (
             <div className="min-h-screen bg-background flex items-center justify-center">
@@ -387,6 +568,22 @@ export default function CompanyDetail() {
                     </div>
 
                     <div className="flex gap-2">
+                        <Button
+                            onClick={() => setExtendTrialDialogOpen(true)}
+                            variant="outline"
+                        >
+                            <Clock className="w-4 h-4 mr-2" />
+                            Extend Trial
+                        </Button>
+
+                        <Button
+                            onClick={() => setInvoiceCorrectionDialogOpen(true)}
+                            variant="outline"
+                        >
+                            <FileEdit className="w-4 h-4 mr-2" />
+                            Invoice Correction
+                        </Button>
+
                         {company.is_blocked ? (
                             <Button onClick={handleUnblockCompany} variant="default">
                                 <CheckCircle className="w-4 h-4 mr-2" />
@@ -523,6 +720,7 @@ export default function CompanyDetail() {
                                         <TableHead>Last Login</TableHead>
                                         <TableHead>Failed Logins</TableHead>
                                         <TableHead>Created</TableHead>
+                                        <TableHead className="text-right">Actions</TableHead>
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
@@ -549,6 +747,19 @@ export default function CompanyDetail() {
                                             </TableCell>
                                             <TableCell>
                                                 {new Date(user.created_at).toLocaleDateString()}
+                                            </TableCell>
+                                            <TableCell className="text-right">
+                                                <Button
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    onClick={() => {
+                                                        setSelectedUserForReset(user);
+                                                        setResetPasswordDialogOpen(true);
+                                                    }}
+                                                >
+                                                    <Key className="w-4 h-4 mr-2" />
+                                                    Reset Password
+                                                </Button>
                                             </TableCell>
                                         </TableRow>
                                     ))}
@@ -730,6 +941,134 @@ export default function CompanyDetail() {
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
+
+            {/* Extend Trial Dialog */}
+            <Dialog open={extendTrialDialogOpen} onOpenChange={setExtendTrialDialogOpen}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Extend Trial Period</DialogTitle>
+                        <DialogDescription>
+                            Extend the trial period for this company. Enter the number of days to add.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-4">
+                        <div>
+                            <Label>Number of days to extend</Label>
+                            <Input
+                                type="number"
+                                value={trialExtensionDays}
+                                onChange={(e) => setTrialExtensionDays(e.target.value)}
+                                placeholder="30"
+                                min="1"
+                            />
+                            {company?.trial_ends_at && (
+                                <p className="text-sm text-muted-foreground mt-2">
+                                    Current trial ends: {new Date(company.trial_ends_at).toLocaleDateString()}
+                                </p>
+                            )}
+                        </div>
+                    </div>
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setExtendTrialDialogOpen(false)}>
+                            Cancel
+                        </Button>
+                        <Button onClick={handleExtendTrial}>
+                            Extend Trial
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            {/* Reset Password Dialog */}
+            <Dialog open={resetPasswordDialogOpen} onOpenChange={setResetPasswordDialogOpen}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Reset User Password</DialogTitle>
+                        <DialogDescription>
+                            Reset the password for {selectedUserForReset?.full_name} ({selectedUserForReset?.email})
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-4">
+                        <div>
+                            <Label>New Password</Label>
+                            <Input
+                                type="password"
+                                value={newPassword}
+                                onChange={(e) => setNewPassword(e.target.value)}
+                                placeholder="Enter new password (min 8 characters)"
+                                minLength={8}
+                            />
+                            <p className="text-sm text-muted-foreground mt-2">
+                                Minimum 8 characters required
+                            </p>
+                        </div>
+                    </div>
+                    <DialogFooter>
+                        <Button
+                            variant="outline"
+                            onClick={() => {
+                                setResetPasswordDialogOpen(false);
+                                setSelectedUserForReset(null);
+                                setNewPassword("");
+                            }}
+                        >
+                            Cancel
+                        </Button>
+                        <Button onClick={handleResetPassword} variant="destructive">
+                            Reset Password
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            {/* Invoice Correction Dialog */}
+            <Dialog open={invoiceCorrectionDialogOpen} onOpenChange={setInvoiceCorrectionDialogOpen}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Invoice Correction</DialogTitle>
+                        <DialogDescription>
+                            Log an invoice correction for {company?.name}. This will create an audit trail.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-4">
+                        <div>
+                            <Label>Correction Amount (€)</Label>
+                            <Input
+                                type="number"
+                                step="0.01"
+                                value={correctionAmount}
+                                onChange={(e) => setCorrectionAmount(e.target.value)}
+                                placeholder="0.00"
+                            />
+                        </div>
+                        <div>
+                            <Label>Reason for Correction</Label>
+                            <Textarea
+                                value={correctionReason}
+                                onChange={(e) => setCorrectionReason(e.target.value)}
+                                placeholder="e.g., Billing error, Discount applied, Credit issued"
+                                rows={4}
+                            />
+                        </div>
+                    </div>
+                    <DialogFooter>
+                        <Button
+                            variant="outline"
+                            onClick={() => {
+                                setInvoiceCorrectionDialogOpen(false);
+                                setCorrectionReason("");
+                                setCorrectionAmount("");
+                            }}
+                        >
+                            Cancel
+                        </Button>
+                        <Button onClick={handleInvoiceCorrection}>
+                            Submit Correction
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
         </div>
     );
 }

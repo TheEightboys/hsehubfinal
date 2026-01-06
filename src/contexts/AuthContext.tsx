@@ -202,11 +202,32 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const updateLastLogin = async (userId: string) => {
     try {
+      // Update last login timestamp
       await supabase
         .from("user_roles")
         .update({ last_login_at: new Date().toISOString() })
         .eq("user_id", userId);
+
       console.log("[AuthContext] Updated last_login_at for user:", userId);
+
+      // Create audit log entry for login
+      try {
+        await supabase.rpc("create_audit_log", {
+          p_action_type: "login",
+          p_target_type: "user",
+          p_target_id: userId,
+          p_target_name: user?.email || "Unknown User",
+          p_details: {
+            timestamp: new Date().toISOString(),
+            user_agent: navigator.userAgent,
+          },
+          p_company_id: null,
+        });
+        console.log("[AuthContext] Created audit log for login");
+      } catch (auditError) {
+        console.error("[AuthContext] Failed to create audit log:", auditError);
+        // Don't throw - audit logging is not critical for auth flow
+      }
     } catch (error) {
       console.error("[AuthContext] Failed to update last_login_at:", error);
       // Don't throw - this is not critical for auth flow
