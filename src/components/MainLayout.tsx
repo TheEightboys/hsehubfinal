@@ -146,13 +146,9 @@ export default function MainLayout({ children }: Props) {
                 <BarChart3 className="w-4 h-4" />
                 <span>Analytics</span>
               </Link>
-              <Link to="/super-admin/audit-logs" className={getLinkClasses("/super-admin/audit-logs")}>
+              <Link to="/super-admin/system-logs" className={getLinkClasses("/super-admin/system-logs")}>
                 <FileCheck className="w-4 h-4" />
                 <span>System & Logs</span>
-              </Link>
-              <Link to="/super-admin/system-health" className={getLinkClasses("/super-admin/system-health")}>
-                <Shield className="w-4 h-4" />
-                <span>Security</span>
               </Link>
               <Link to="/super-admin/support" className={getLinkClasses("/super-admin/support")}>
                 <MessageSquare className="w-4 h-4" />

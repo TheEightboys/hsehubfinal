@@ -38,6 +38,12 @@ import {
   GraduationCap,
   Download,
   RefreshCcw,
+  Activity,
+  Server,
+  Database,
+  AlertTriangle,
+  CheckCircle,
+  XCircle,
 } from "lucide-react";
 import {
   BarChart,
@@ -87,6 +93,7 @@ interface GrowthData {
   users: number;
 }
 
+
 const COLORS = ["#3B82F6", "#8B5CF6", "#F59E0B", "#10B981", "#EF4444"];
 
 export default function Analytics() {
@@ -100,6 +107,7 @@ export default function Analytics() {
   const [growthData, setGrowthData] = useState<GrowthData[]>([]);
   const [tierBreakdown, setTierBreakdown] = useState<any[]>([]);
   const [featureUsage, setFeatureUsage] = useState<any[]>([]);
+
 
   // Summary stats
   const [summaryStats, setSummaryStats] = useState({
@@ -366,6 +374,7 @@ export default function Analytics() {
           </Button>
         </div>
       </div>
+
 
       {/* Summary Stats */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
