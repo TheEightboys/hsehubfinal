@@ -251,7 +251,7 @@ export default function Analytics() {
     try {
       // Count usage of different features across all companies
       const [employees, documents, courses, audits, incidents, riskAssessments] = await Promise.all([
-        supabase.from("employees").select("id", { count: "exact", head: true }),
+        supabase.from("team_members").select("id", { count: "exact", head: true }),
         supabase.from("documents").select("id", { count: "exact", head: true }),
         supabase.from("courses").select("id", { count: "exact", head: true }),
         supabase.from("audits").select("id", { count: "exact", head: true }),
