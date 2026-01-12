@@ -90,10 +90,12 @@ interface SubscriptionEvent {
 
 interface CompanyAddon {
     id: string;
+    addon_id: string;
     addon_name: string;
-    price_paid: number;
+    price_paid: number | null;
     status: string;
-    activated_at: string;
+    start_date: string;
+    billing_cycle: string;
 }
 
 export default function CompanyDetail() {
@@ -229,16 +231,31 @@ export default function CompanyDetail() {
     const fetchAddons = async () => {
         const { data, error } = await supabase
             .from("company_addons")
-            .select("*")
+            .select(`
+                *,
+                addon_definitions:addon_id(name, code)
+            `)
             .eq("company_id", id)
-            .order("activated_at", { ascending: false });
+            .order("start_date", { ascending: false });
 
         if (error) {
             console.error("Addons error:", error);
             setAddons([]);
             return;
         }
-        setAddons(data || []);
+
+        // Transform data to include addon_name from the join
+        const transformedAddons = (data || []).map(addon => ({
+            id: addon.id,
+            addon_id: addon.addon_id,
+            addon_name: addon.addon_definitions?.name || "Unknown Add-on",
+            price_paid: addon.price_paid,
+            status: addon.status,
+            start_date: addon.start_date,
+            billing_cycle: addon.billing_cycle,
+        }));
+
+        setAddons(transformedAddons);
     };
 
     const fetchAuditLogs = async () => {
@@ -980,7 +997,7 @@ export default function CompanyDetail() {
                                         {addons.map((addon) => (
                                             <TableRow key={addon.id}>
                                                 <TableCell className="font-medium">{addon.addon_name}</TableCell>
-                                                <TableCell>€{addon.price_paid}</TableCell>
+                                                <TableCell>€{addon.price_paid || 0}</TableCell>
                                                 <TableCell>
                                                     <Badge
                                                         variant={addon.status === "active" ? "default" : "secondary"}
@@ -989,7 +1006,7 @@ export default function CompanyDetail() {
                                                     </Badge>
                                                 </TableCell>
                                                 <TableCell>
-                                                    {new Date(addon.activated_at).toLocaleDateString()}
+                                                    {new Date(addon.start_date).toLocaleDateString()}
                                                 </TableCell>
                                             </TableRow>
                                         ))}
