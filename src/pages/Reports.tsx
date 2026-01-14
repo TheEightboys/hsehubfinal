@@ -116,7 +116,7 @@ export default function Reports() {
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showFilterDialog, setShowFilterDialog] = useState(false);
   const [showAddReportDialog, setShowAddReportDialog] = useState(false);
-  
+
   const [stats, setStats] = useState<ReportStats>({
     totalEmployees: 0,
     totalRiskAssessments: 0,
@@ -135,7 +135,7 @@ export default function Reports() {
 
   const [trainingMatrix, setTrainingMatrix] = useState<TrainingStatus[]>([]);
   const [chartData, setChartData] = useState<any[]>([]);
-  
+
   // Analytics & Report Builder State
   const [customReports, setCustomReports] = useState<ReportConfig[]>([]);
   const [isBuilderOpen, setIsBuilderOpen] = useState(false);
@@ -167,7 +167,7 @@ export default function Reports() {
       loadCustomReports();
     }
   }, [companyId]);
-  
+
   // Load custom reports from localStorage
   const loadCustomReports = () => {
     try {
@@ -179,7 +179,7 @@ export default function Reports() {
       console.error('Error loading custom reports:', error);
     }
   };
-  
+
   // Save custom reports to localStorage
   const saveCustomReports = (reports: ReportConfig[]) => {
     try {
@@ -375,6 +375,272 @@ export default function Reports() {
     });
   };
 
+  const calculateDateRange = (range: any) => {
+    const endDate = new Date();
+    let startDate = new Date();
+
+    switch (range?.type) {
+      case "last_7_days":
+        startDate.setDate(endDate.getDate() - 7);
+        break;
+      case "last_30_days":
+        startDate.setDate(endDate.getDate() - 30);
+        break;
+      case "last_90_days":
+        startDate.setDate(endDate.getDate() - 90);
+        break;
+      case "last_year":
+        startDate.setFullYear(endDate.getFullYear() - 1);
+        break;
+      case "all_time":
+        startDate.setFullYear(endDate.getFullYear() - 10); // 10 years back
+        break;
+      default:
+        // Default to all time to ensure data is captured
+        startDate.setFullYear(endDate.getFullYear() - 10);
+    }
+
+    return {
+      startDate: startDate.toISOString(),
+      endDate: endDate.toISOString(),
+    };
+  };
+
+  const fetchTemplateData = async (template: Partial<ReportConfig>) => {
+    if (!companyId) return [];
+
+    const { metric, groupBy, dateRange } = template;
+    const { startDate, endDate } = calculateDateRange(dateRange);
+
+    try {
+      // Special handling for employees with department/location joins
+      if (metric === "employees") {
+        if (groupBy === "department") {
+          // Join with departments table to get department names
+          const { data, error } = await supabase
+            .from("employees")
+            .select("department_id, departments(name)")
+            .eq("company_id", companyId);
+
+          if (error) {
+            console.error("Error fetching employee data:", error);
+            return [];
+          }
+
+          // Group by department name
+          const grouped = (data || []).reduce((acc: Record<string, number>, item: any) => {
+            const deptName = item.departments?.name || "Unassigned";
+            acc[deptName] = (acc[deptName] || 0) + 1;
+            return acc;
+          }, {});
+
+          return Object.entries(grouped).map(([name, value]) => ({ name, value }));
+        } else if (groupBy === "location") {
+          // Location doesn't exist on employees table, use department as fallback
+          const { data, error } = await supabase
+            .from("employees")
+            .select("department_id, departments(name)")
+            .eq("company_id", companyId);
+
+          if (error) {
+            console.error("Error fetching employee location data:", error);
+            return [];
+          }
+
+          const grouped = (data || []).reduce((acc: Record<string, number>, item: any) => {
+            const deptName = item.departments?.name || "Unassigned";
+            acc[deptName] = (acc[deptName] || 0) + 1;
+            return acc;
+          }, {});
+
+          return Object.entries(grouped).map(([name, value]) => ({ name, value }));
+        } else if (groupBy === "created_at") {
+          // Group by month for time-based reports
+          const { data, error } = await supabase
+            .from("employees")
+            .select("created_at")
+            .eq("company_id", companyId)
+            .gte("created_at", startDate)
+            .lte("created_at", endDate);
+
+          if (error) {
+            console.error("Error fetching employee time data:", error);
+            return [];
+          }
+
+          const grouped = (data || []).reduce((acc: Record<string, number>, item: any) => {
+            if (!item.created_at) return acc;
+            const date = new Date(item.created_at);
+            const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+            acc[monthKey] = (acc[monthKey] || 0) + 1;
+            return acc;
+          }, {});
+
+          return Object.entries(grouped)
+            .sort(([a], [b]) => a.localeCompare(b))
+            .map(([name, value]) => ({ name, value }));
+        }
+      }
+
+      // Standard handling for other metrics
+      let table: string;
+      let groupColumn: string;
+
+      switch (metric) {
+        case "incidents":
+          // Special handling for incidents - use incident_date instead of created_at
+          {
+            // Determine which column to group by
+            let incidentGroupCol = "investigation_status";
+            if (groupBy === "category" || groupBy === "incident_type") {
+              incidentGroupCol = "incident_type";
+            } else if (groupBy === "severity") {
+              incidentGroupCol = "severity";
+            } else if (groupBy === "investigation_status" || groupBy === "status") {
+              incidentGroupCol = "investigation_status";
+            }
+
+            const { data, error } = await supabase
+              .from("incidents")
+              .select(incidentGroupCol)
+              .eq("company_id", companyId);
+
+            if (error) {
+              console.error("Error fetching incidents data:", error);
+              return [];
+            }
+
+            // Group and count
+            const grouped = (data || []).reduce((acc: Record<string, number>, item: any) => {
+              const key = item[incidentGroupCol] || "Unknown";
+              acc[key] = (acc[key] || 0) + 1;
+              return acc;
+            }, {});
+
+            return Object.entries(grouped).map(([name, value]) => ({ name, value }));
+          }
+          break;
+        case "audits":
+          table = "audits";
+          if (groupBy === "category") {
+            groupColumn = "audit_type";
+          } else {
+            groupColumn = groupBy || "status";
+          }
+          break;
+        case "trainings":
+          // Courses are catalog items, don't filter by date
+          // Query all courses and group by name (each course is 1 item)
+          {
+            const { data, error } = await supabase
+              .from("courses")
+              .select("id, name")
+              .eq("company_id", companyId);
+
+            if (error) {
+              console.error("Error fetching courses data:", error);
+              return [];
+            }
+
+            // Return each course as a data point
+            return (data || []).map(course => ({
+              name: course.name,
+              value: 1,
+            }));
+          }
+          break;
+        case "risks":
+          table = "risk_assessments";
+          groupColumn = groupBy || "risk_level";
+          break;
+        case "measures":
+          table = "measures";
+          groupColumn = groupBy || "status";
+          break;
+        case "checkups":
+          // Special handling for health checkups
+          {
+            const { data, error } = await supabase
+              .from("health_checkups")
+              .select("status")
+              .eq("company_id", companyId);
+
+            if (error) {
+              console.error("Error fetching health checkups data:", error);
+              return [];
+            }
+
+            // Group by status
+            const grouped = (data || []).reduce((acc: Record<string, number>, item: any) => {
+              const key = item.status || "Unknown";
+              acc[key] = (acc[key] || 0) + 1;
+              return acc;
+            }, {});
+
+            return Object.entries(grouped).map(([name, value]) => ({ name, value }));
+          }
+          break;
+        default:
+          return [];
+      }
+
+      // Handle time-based grouping for other metrics
+      if (groupBy === "created_at") {
+        const { data, error } = await supabase
+          .from(table as any)
+          .select("created_at")
+          .eq("company_id", companyId)
+          .gte("created_at", startDate)
+          .lte("created_at", endDate);
+
+        if (error) {
+          console.error("Error fetching time data:", error);
+          return [];
+        }
+
+        const grouped = (data || []).reduce((acc: Record<string, number>, item: any) => {
+          if (!item.created_at) return acc;
+          const date = new Date(item.created_at);
+          const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+          acc[monthKey] = (acc[monthKey] || 0) + 1;
+          return acc;
+        }, {});
+
+        return Object.entries(grouped)
+          .sort(([a], [b]) => a.localeCompare(b))
+          .map(([name, value]) => ({ name, value }));
+      }
+
+      const { data, error } = await supabase
+        .from(table as any)
+        .select(groupColumn)
+        .eq("company_id", companyId)
+        .gte("created_at", startDate)
+        .lte("created_at", endDate);
+
+      if (error) {
+        console.error("Error fetching template data:", error);
+        return [];
+      }
+
+      // Group and count data
+      const grouped = (data || []).reduce((acc: Record<string, number>, item: any) => {
+        const key = item[groupColumn] || "Unknown";
+        acc[key] = (acc[key] || 0) + 1;
+        return acc;
+      }, {});
+
+      // Convert to chart format
+      return Object.entries(grouped).map(([name, value]) => ({
+        name,
+        value,
+      }));
+    } catch (error) {
+      console.error("Error in fetchTemplateData:", error);
+      return [];
+    }
+  };
+
   const handleAddFilter = () => {
     setShowFilterDialog(true);
     toast({
@@ -386,17 +652,33 @@ export default function Reports() {
   const handleAddReport = () => {
     setIsLibraryOpen(true);
   };
-  
-  const handleSelectTemplate = (template: Partial<ReportConfig>) => {
-    setSelectedReport({ ...template, id: Date.now().toString() } as ReportConfig);
-    setIsLibraryOpen(false);
-    setIsBuilderOpen(true);
+
+  const handleSelectTemplate = async (template: Partial<ReportConfig>) => {
+    try {
+      // Fetch real data for the template
+      const data = await fetchTemplateData(template);
+
+      setSelectedReport({
+        ...template,
+        id: Date.now().toString(),
+        data, // Include actual fetched data
+      } as ReportConfig);
+      setIsLibraryOpen(false);
+      setIsBuilderOpen(true);
+    } catch (error) {
+      console.error("Error selecting template:", error);
+      toast({
+        title: "Error",
+        description: "Failed to load template data",
+        variant: "destructive",
+      });
+    }
   };
-  
+
   const handleSaveReport = (config: ReportConfig) => {
     const existingIndex = customReports.findIndex(r => r.id === config.id);
     let updatedReports;
-    
+
     if (existingIndex >= 0) {
       // Update existing
       updatedReports = [...customReports];
@@ -413,17 +695,17 @@ export default function Reports() {
         description: `"${config.title}" has been added to your dashboard`,
       });
     }
-    
+
     saveCustomReports(updatedReports);
     setIsBuilderOpen(false);
     setSelectedReport(null);
   };
-  
+
   const handleEditReport = (config: ReportConfig) => {
     setSelectedReport(config);
     setIsBuilderOpen(true);
   };
-  
+
   const handleDuplicateReport = (config: ReportConfig) => {
     const duplicate = {
       ...config,
@@ -437,7 +719,7 @@ export default function Reports() {
       description: `Created a copy of "${config.title}"`,
     });
   };
-  
+
   const handleDeleteReport = (id: string) => {
     const report = customReports.find(r => r.id === id);
     const updatedReports = customReports.filter(r => r.id !== id);
@@ -447,7 +729,7 @@ export default function Reports() {
       description: `"${report?.title}" has been removed`,
     });
   };
-  
+
   const handleExportReport = (config: ReportConfig) => {
     toast({
       title: "Exporting Report",
@@ -481,11 +763,10 @@ export default function Reports() {
             <button
               key={section.id}
               onClick={() => setActiveSection(section.id)}
-              className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                activeSection === section.id
-                  ? "bg-primary text-primary-foreground"
-                  : "text-muted-foreground hover:bg-muted hover:text-foreground"
-              }`}
+              className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${activeSection === section.id
+                ? "bg-primary text-primary-foreground"
+                : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                }`}
             >
               {section.icon}
               <span>{section.name}</span>
@@ -507,7 +788,7 @@ export default function Reports() {
                 placeholder="Report Name"
               />
             </div>
-            
+
             <div className="flex items-center gap-3">
               <Select value={dateRange} onValueChange={handleDateRangeChange}>
                 <SelectTrigger className="w-40">
@@ -523,12 +804,12 @@ export default function Reports() {
                   <SelectItem value="this-year">This year</SelectItem>
                 </SelectContent>
               </Select>
-              
+
               <Button variant="outline" size="sm" onClick={handleAddFilter}>
                 <Filter className="w-4 h-4 mr-2" />
                 Add filter
               </Button>
-              
+
               <Select value={visibility} onValueChange={handleVisibilityChange}>
                 <SelectTrigger className="w-48">
                   <Eye className="w-4 h-4 mr-2" />
@@ -540,12 +821,12 @@ export default function Reports() {
                   <SelectItem value="company">Visible to company</SelectItem>
                 </SelectContent>
               </Select>
-              
+
               <Button className="bg-purple-600 hover:bg-purple-700" size="sm" onClick={handleAddReport}>
                 <Plus className="w-4 h-4 mr-2" />
                 Add report
               </Button>
-              
+
               <Button variant="outline" size="sm" onClick={exportReport}>
                 <Download className="w-4 h-4 mr-2" />
                 Export PDF
@@ -582,7 +863,7 @@ export default function Reports() {
           )}
         </div>
       </main>
-      
+
       {/* Report Builder & Library Dialogs */}
       <ReportBuilder
         isOpen={isBuilderOpen}
@@ -592,8 +873,9 @@ export default function Reports() {
         }}
         onSave={handleSaveReport}
         initialConfig={selectedReport}
+        data={selectedReport?.data || []}
       />
-      
+
       <ReportLibrary
         isOpen={isLibraryOpen}
         onClose={() => setIsLibraryOpen(false)}
@@ -671,16 +953,16 @@ const generateCustomReportsLayout = (reportCount: number) => {
   return layouts;
 };
 
-function OverviewSection({ 
-  stats, 
-  chartData, 
-  customReports, 
-  onEditReport, 
-  onDuplicateReport, 
-  onDeleteReport, 
-  onExportReport 
-}: { 
-  stats: ReportStats; 
+function OverviewSection({
+  stats,
+  chartData,
+  customReports,
+  onEditReport,
+  onDuplicateReport,
+  onDeleteReport,
+  onExportReport
+}: {
+  stats: ReportStats;
   chartData: any[];
   customReports: ReportConfig[];
   onEditReport: (config: ReportConfig) => void;
@@ -735,6 +1017,55 @@ function OverviewSection({
       description: "Dashboard layout has been reset to default",
     });
   }, [toast]);
+
+  // Sync custom reports layout when reports change (add/remove)
+  useEffect(() => {
+    setCustomReportsLayouts(currentLayouts => {
+      const newLayouts = { ...currentLayouts };
+      const breakpoints = ['lg', 'md', 'sm'];
+      let hasChanges = false;
+
+      breakpoints.forEach(bp => {
+        const bpLayout = [...(newLayouts[bp] || [])];
+
+        // Add specific layout items for new reports
+        if (customReports.length > bpLayout.length) {
+          hasChanges = true;
+          for (let i = bpLayout.length; i < customReports.length; i++) {
+            bpLayout.push({
+              i: `custom-report-${i}`,
+              x: (i % 3) * 4,
+              y: Math.floor(i / 3) * 6, // Place below previous ones
+              w: 4,
+              h: 6,
+              minW: 3,
+              minH: 4,
+              static: false,
+            });
+          }
+        }
+        // Handle removals
+        else if (customReports.length < bpLayout.length) {
+          hasChanges = true;
+          newLayouts[bp] = bpLayout.slice(0, customReports.length);
+          return;
+        }
+
+        newLayouts[bp] = bpLayout;
+      });
+
+      if (!hasChanges) return currentLayouts;
+
+      // Save new state
+      try {
+        localStorage.setItem(CUSTOM_REPORTS_LAYOUT_KEY, JSON.stringify(newLayouts));
+      } catch (e) {
+        console.error("Error saving updated custom layout:", e);
+      }
+
+      return newLayouts;
+    });
+  }, [customReports.length]);
 
   return (
     <div className="space-y-8">
@@ -823,8 +1154,8 @@ function OverviewSection({
                 <AreaChart data={chartData}>
                   <defs>
                     <linearGradient id="colorIncidents" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#8b5cf6" stopOpacity={0.3}/>
-                      <stop offset="95%" stopColor="#8b5cf6" stopOpacity={0}/>
+                      <stop offset="5%" stopColor="#8b5cf6" stopOpacity={0.3} />
+                      <stop offset="95%" stopColor="#8b5cf6" stopOpacity={0} />
                     </linearGradient>
                   </defs>
                   <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
@@ -911,7 +1242,7 @@ function OverviewSection({
           </Card>
         </div>
       </ResponsiveGridLayout>
-      
+
       {/* Custom Reports Grid */}
       {customReports && customReports.length > 0 && (
         <div className="mt-12">
@@ -938,7 +1269,7 @@ function OverviewSection({
               Reset Layout
             </Button>
           </div>
-          
+
           <ResponsiveGridLayout
             className="layout"
             layouts={customReportsLayouts}
@@ -1200,7 +1531,7 @@ function RiskAssessmentsSection({ stats, chartData }: { stats: ReportStats; char
   const defaultLayout = [
     { i: "risk-total", x: 0, y: 0, w: 3, h: 2, minW: 2, minH: 2, static: false },
   ];
-  
+
   const [layouts, setLayouts] = useState<{ [key: string]: any[] }>(() => {
     try {
       const saved = localStorage.getItem('hse_layout_risk_assessments');
@@ -1265,7 +1596,8 @@ function RiskAssessmentsSection({ stats, chartData }: { stats: ReportStats; char
         </div>
       </ResponsiveGridLayout>
     </div>
-  );}
+  );
+}
 
 function AuditsSection({ stats, chartData }: { stats: ReportStats; chartData: any[] }) {
   const { toast } = useToast();
@@ -1273,7 +1605,7 @@ function AuditsSection({ stats, chartData }: { stats: ReportStats; chartData: an
     { i: "audit-total", x: 0, y: 0, w: 3, h: 2, minW: 2, minH: 2, static: false },
     { i: "audit-completed", x: 3, y: 0, w: 3, h: 2, minW: 2, minH: 2, static: false },
   ];
-  
+
   const [layouts, setLayouts] = useState<{ [key: string]: any[] }>(() => {
     try {
       const saved = localStorage.getItem('hse_layout_audits');
@@ -1357,7 +1689,7 @@ function IncidentsSection({ stats, chartData }: { stats: ReportStats; chartData:
     { i: "incident-open", x: 3, y: 0, w: 3, h: 2, minW: 2, minH: 2, static: false },
     { i: "incident-closed", x: 6, y: 0, w: 3, h: 2, minW: 2, minH: 2, static: false },
   ];
-  
+
   const [layouts, setLayouts] = useState<{ [key: string]: any[] }>(() => {
     try {
       const saved = localStorage.getItem('hse_layout_incidents');
@@ -1457,7 +1789,7 @@ function TrainingsSection({
     { i: "training-total", x: 0, y: 0, w: 3, h: 2, minW: 2, minH: 2, static: false },
     { i: "training-compliance", x: 3, y: 0, w: 3, h: 2, minW: 2, minH: 2, static: false },
   ];
-  
+
   const [layouts, setLayouts] = useState<{ [key: string]: any[] }>(() => {
     try {
       const saved = localStorage.getItem('hse_layout_trainings');
@@ -1607,7 +1939,7 @@ function MeasuresSection({ stats, chartData }: { stats: ReportStats; chartData: 
     { i: "measures-completed", x: 3, y: 0, w: 3, h: 2, minW: 2, minH: 2, static: false },
     { i: "measures-progress", x: 6, y: 0, w: 3, h: 2, minW: 2, minH: 2, static: false },
   ];
-  
+
   const [layouts, setLayouts] = useState<{ [key: string]: any[] }>(() => {
     try {
       const saved = localStorage.getItem('hse_layout_measures');
@@ -1699,7 +2031,7 @@ function TasksSection({ stats, chartData }: { stats: ReportStats; chartData: any
     { i: "tasks-total", x: 0, y: 0, w: 3, h: 2, minW: 2, minH: 2, static: false },
     { i: "tasks-completed", x: 3, y: 0, w: 3, h: 2, minW: 2, minH: 2, static: false },
   ];
-  
+
   const [layouts, setLayouts] = useState<{ [key: string]: any[] }>(() => {
     try {
       const saved = localStorage.getItem('hse_layout_tasks');
@@ -1781,7 +2113,7 @@ function CheckupsSection({ stats }: { stats: ReportStats }) {
   const defaultLayout = [
     { i: "checkups-total", x: 0, y: 0, w: 3, h: 2, minW: 2, minH: 2, static: false },
   ];
-  
+
   const [layouts, setLayouts] = useState<{ [key: string]: any[] }>(() => {
     try {
       const saved = localStorage.getItem('hse_layout_checkups');

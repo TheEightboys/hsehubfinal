@@ -2,6 +2,7 @@ import { useEffect, useState, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { usePermissions } from "@/hooks/usePermissions";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import {
@@ -165,6 +166,7 @@ export default function EmployeeProfile() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { companyId, user } = useAuth();
+  const { hasPermission } = usePermissions();
 
   const [employee, setEmployee] = useState<EmployeeData | null>(null);
   const [editMode, setEditMode] = useState<{ [key: string]: boolean }>({});
@@ -2030,12 +2032,16 @@ export default function EmployeeProfile() {
             <TabsTrigger value="overview" className="px-4 py-2">
               Overview
             </TabsTrigger>
-            <TabsTrigger value="checkups" className="px-4 py-2">
-              Check-Ups
-            </TabsTrigger>
-            <TabsTrigger value="documents" className="px-4 py-2">
-              Documents
-            </TabsTrigger>
+            {hasPermission("healthCheckups") && (
+              <TabsTrigger value="checkups" className="px-4 py-2">
+                Check-Ups
+              </TabsTrigger>
+            )}
+            {hasPermission("documents") && (
+              <TabsTrigger value="documents" className="px-4 py-2">
+                Documents
+              </TabsTrigger>
+            )}
             <TabsTrigger value="activity" className="px-4 py-2">
               Activity
             </TabsTrigger>
