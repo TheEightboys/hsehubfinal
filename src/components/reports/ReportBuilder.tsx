@@ -40,6 +40,7 @@ export interface ReportConfig {
   };
   chartType: 'pie' | 'bar' | 'line';
   sortBy: string;
+  data?: any[]; // Optional data from fetched results
 }
 
 interface ReportBuilderProps {
@@ -88,7 +89,7 @@ export default function ReportBuilder({
   // Generate sample/mock data based on config
   const getChartData = () => {
     if (data && data.length > 0) return data;
-    
+
     // Mock data for demonstration
     return [
       { name: 'Safety', value: 12 },
@@ -126,7 +127,7 @@ export default function ReportBuilder({
             </RechartsPie>
           </ResponsiveContainer>
         );
-      
+
       case 'bar':
         return (
           <ResponsiveContainer width="100%" height={300}>
@@ -140,7 +141,7 @@ export default function ReportBuilder({
             </BarChart>
           </ResponsiveContainer>
         );
-      
+
       case 'line':
         return (
           <ResponsiveContainer width="100%" height={300}>
@@ -239,8 +240,8 @@ export default function ReportBuilder({
             {/* Date Range */}
             <div className="space-y-2">
               <Label htmlFor="dateRange">Date Range</Label>
-              <Select 
-                value={config.dateRange.type} 
+              <Select
+                value={config.dateRange.type}
                 onValueChange={(val) => updateConfig('dateRange', { ...config.dateRange, type: val })}
               >
                 <SelectTrigger id="dateRange">

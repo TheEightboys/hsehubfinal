@@ -116,7 +116,7 @@ export default function Reports() {
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showFilterDialog, setShowFilterDialog] = useState(false);
   const [showAddReportDialog, setShowAddReportDialog] = useState(false);
-  
+
   const [stats, setStats] = useState<ReportStats>({
     totalEmployees: 0,
     totalRiskAssessments: 0,
@@ -135,7 +135,7 @@ export default function Reports() {
 
   const [trainingMatrix, setTrainingMatrix] = useState<TrainingStatus[]>([]);
   const [chartData, setChartData] = useState<any[]>([]);
-  
+
   // Analytics & Report Builder State
   const [customReports, setCustomReports] = useState<ReportConfig[]>([]);
   const [isBuilderOpen, setIsBuilderOpen] = useState(false);
@@ -167,7 +167,7 @@ export default function Reports() {
       loadCustomReports();
     }
   }, [companyId]);
-  
+
   // Load custom reports from localStorage
   const loadCustomReports = () => {
     try {
@@ -179,7 +179,7 @@ export default function Reports() {
       console.error('Error loading custom reports:', error);
     }
   };
-  
+
   // Save custom reports to localStorage
   const saveCustomReports = (reports: ReportConfig[]) => {
     try {
@@ -375,6 +375,107 @@ export default function Reports() {
     });
   };
 
+  const calculateDateRange = (range: any) => {
+    const endDate = new Date();
+    let startDate = new Date();
+
+    switch (range?.type) {
+      case "last_7_days":
+        startDate.setDate(endDate.getDate() - 7);
+        break;
+      case "last_30_days":
+        startDate.setDate(endDate.getDate() - 30);
+        break;
+      case "last_90_days":
+        startDate.setDate(endDate.getDate() - 90);
+        break;
+      case "last_year":
+        startDate.setFullYear(endDate.getFullYear() - 1);
+        break;
+      default:
+        startDate.setDate(endDate.getDate() - 30);
+    }
+
+    return {
+      startDate: startDate.toISOString(),
+      endDate: endDate.toISOString(),
+    };
+  };
+
+  const fetchTemplateData = async (template: Partial<ReportConfig>) => {
+    if (!companyId) return [];
+
+    const { metric, groupBy, dateRange } = template;
+    const { startDate, endDate } = calculateDateRange(dateRange);
+
+    let table: string;
+    let groupColumn: string;
+
+    // Map metric to Supabase table and column
+    switch (metric) {
+      case "employees":
+        table = "employees";
+        groupColumn = groupBy || "department";
+        break;
+      case "incidents":
+        table = "incidents";
+        groupColumn = groupBy || "status";
+        break;
+      case "audits":
+        table = "audits";
+        groupColumn = groupBy || "status";
+        break;
+      case "trainings":
+        table = "courses";
+        groupColumn = groupBy || "status";
+        break;
+      case "risks":
+        table = "risk_assessments";
+        groupColumn = groupBy || "priority";
+        break;
+      case "measures":
+        table = "measures";
+        groupColumn = groupBy || "status";
+        break;
+      case "checkups":
+        table = "employee_checkups";
+        groupColumn = groupBy || "status";
+        break;
+      default:
+        return [];
+    }
+
+    try {
+      const { data, error } = await supabase
+        .from(table as any)
+        .select(groupColumn)
+        .eq("company_id", companyId)
+        .gte("created_at", startDate)
+        .lte("created_at", endDate);
+
+      if (error) {
+        console.error("Error fetching template data:", error);
+        return [];
+      }
+
+      // Group and count data
+      const grouped = (data || []).reduce((acc: Record<string, number>, item: any) => {
+        const key = item[groupColumn] || "Unknown";
+        acc[key] = (acc[key] || 0) + 1;
+        return acc;
+      }, {});
+
+      // Convert to chart format
+      return Object.entries(grouped).map(([name, value]) => ({
+        name,
+        value,
+      }));
+    } catch (error) {
+      console.error("Error in fetchTemplateData:", error);
+      return [];
+    }
+  };
+
   const handleAddFilter = () => {
     setShowFilterDialog(true);
     toast({
@@ -386,17 +487,33 @@ export default function Reports() {
   const handleAddReport = () => {
     setIsLibraryOpen(true);
   };
-  
-  const handleSelectTemplate = (template: Partial<ReportConfig>) => {
-    setSelectedReport({ ...template, id: Date.now().toString() } as ReportConfig);
-    setIsLibraryOpen(false);
-    setIsBuilderOpen(true);
+
+  const handleSelectTemplate = async (template: Partial<ReportConfig>) => {
+    try {
+      // Fetch real data for the template
+      const data = await fetchTemplateData(template);
+
+      setSelectedReport({
+        ...template,
+        id: Date.now().toString(),
+        data, // Include actual fetched data
+      } as ReportConfig);
+      setIsLibraryOpen(false);
+      setIsBuilderOpen(true);
+    } catch (error) {
+      console.error("Error selecting template:", error);
+      toast({
+        title: "Error",
+        description: "Failed to load template data",
+        variant: "destructive",
+      });
+    }
   };
-  
+
   const handleSaveReport = (config: ReportConfig) => {
     const existingIndex = customReports.findIndex(r => r.id === config.id);
     let updatedReports;
-    
+
     if (existingIndex >= 0) {
       // Update existing
       updatedReports = [...customReports];
@@ -413,17 +530,17 @@ export default function Reports() {
         description: `"${config.title}" has been added to your dashboard`,
       });
     }
-    
+
     saveCustomReports(updatedReports);
     setIsBuilderOpen(false);
     setSelectedReport(null);
   };
-  
+
   const handleEditReport = (config: ReportConfig) => {
     setSelectedReport(config);
     setIsBuilderOpen(true);
   };
-  
+
   const handleDuplicateReport = (config: ReportConfig) => {
     const duplicate = {
       ...config,
@@ -437,7 +554,7 @@ export default function Reports() {
       description: `Created a copy of "${config.title}"`,
     });
   };
-  
+
   const handleDeleteReport = (id: string) => {
     const report = customReports.find(r => r.id === id);
     const updatedReports = customReports.filter(r => r.id !== id);
@@ -447,7 +564,7 @@ export default function Reports() {
       description: `"${report?.title}" has been removed`,
     });
   };
-  
+
   const handleExportReport = (config: ReportConfig) => {
     toast({
       title: "Exporting Report",
@@ -481,11 +598,10 @@ export default function Reports() {
             <button
               key={section.id}
               onClick={() => setActiveSection(section.id)}
-              className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                activeSection === section.id
-                  ? "bg-primary text-primary-foreground"
-                  : "text-muted-foreground hover:bg-muted hover:text-foreground"
-              }`}
+              className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${activeSection === section.id
+                ? "bg-primary text-primary-foreground"
+                : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                }`}
             >
               {section.icon}
               <span>{section.name}</span>
@@ -507,7 +623,7 @@ export default function Reports() {
                 placeholder="Report Name"
               />
             </div>
-            
+
             <div className="flex items-center gap-3">
               <Select value={dateRange} onValueChange={handleDateRangeChange}>
                 <SelectTrigger className="w-40">
@@ -523,12 +639,12 @@ export default function Reports() {
                   <SelectItem value="this-year">This year</SelectItem>
                 </SelectContent>
               </Select>
-              
+
               <Button variant="outline" size="sm" onClick={handleAddFilter}>
                 <Filter className="w-4 h-4 mr-2" />
                 Add filter
               </Button>
-              
+
               <Select value={visibility} onValueChange={handleVisibilityChange}>
                 <SelectTrigger className="w-48">
                   <Eye className="w-4 h-4 mr-2" />
@@ -540,12 +656,12 @@ export default function Reports() {
                   <SelectItem value="company">Visible to company</SelectItem>
                 </SelectContent>
               </Select>
-              
+
               <Button className="bg-purple-600 hover:bg-purple-700" size="sm" onClick={handleAddReport}>
                 <Plus className="w-4 h-4 mr-2" />
                 Add report
               </Button>
-              
+
               <Button variant="outline" size="sm" onClick={exportReport}>
                 <Download className="w-4 h-4 mr-2" />
                 Export PDF
@@ -582,7 +698,7 @@ export default function Reports() {
           )}
         </div>
       </main>
-      
+
       {/* Report Builder & Library Dialogs */}
       <ReportBuilder
         isOpen={isBuilderOpen}
@@ -592,8 +708,9 @@ export default function Reports() {
         }}
         onSave={handleSaveReport}
         initialConfig={selectedReport}
+        data={selectedReport?.data || []}
       />
-      
+
       <ReportLibrary
         isOpen={isLibraryOpen}
         onClose={() => setIsLibraryOpen(false)}
@@ -671,16 +788,16 @@ const generateCustomReportsLayout = (reportCount: number) => {
   return layouts;
 };
 
-function OverviewSection({ 
-  stats, 
-  chartData, 
-  customReports, 
-  onEditReport, 
-  onDuplicateReport, 
-  onDeleteReport, 
-  onExportReport 
-}: { 
-  stats: ReportStats; 
+function OverviewSection({
+  stats,
+  chartData,
+  customReports,
+  onEditReport,
+  onDuplicateReport,
+  onDeleteReport,
+  onExportReport
+}: {
+  stats: ReportStats;
   chartData: any[];
   customReports: ReportConfig[];
   onEditReport: (config: ReportConfig) => void;
@@ -823,8 +940,8 @@ function OverviewSection({
                 <AreaChart data={chartData}>
                   <defs>
                     <linearGradient id="colorIncidents" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#8b5cf6" stopOpacity={0.3}/>
-                      <stop offset="95%" stopColor="#8b5cf6" stopOpacity={0}/>
+                      <stop offset="5%" stopColor="#8b5cf6" stopOpacity={0.3} />
+                      <stop offset="95%" stopColor="#8b5cf6" stopOpacity={0} />
                     </linearGradient>
                   </defs>
                   <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
@@ -911,7 +1028,7 @@ function OverviewSection({
           </Card>
         </div>
       </ResponsiveGridLayout>
-      
+
       {/* Custom Reports Grid */}
       {customReports && customReports.length > 0 && (
         <div className="mt-12">
@@ -938,7 +1055,7 @@ function OverviewSection({
               Reset Layout
             </Button>
           </div>
-          
+
           <ResponsiveGridLayout
             className="layout"
             layouts={customReportsLayouts}
@@ -1200,7 +1317,7 @@ function RiskAssessmentsSection({ stats, chartData }: { stats: ReportStats; char
   const defaultLayout = [
     { i: "risk-total", x: 0, y: 0, w: 3, h: 2, minW: 2, minH: 2, static: false },
   ];
-  
+
   const [layouts, setLayouts] = useState<{ [key: string]: any[] }>(() => {
     try {
       const saved = localStorage.getItem('hse_layout_risk_assessments');
@@ -1265,7 +1382,8 @@ function RiskAssessmentsSection({ stats, chartData }: { stats: ReportStats; char
         </div>
       </ResponsiveGridLayout>
     </div>
-  );}
+  );
+}
 
 function AuditsSection({ stats, chartData }: { stats: ReportStats; chartData: any[] }) {
   const { toast } = useToast();
@@ -1273,7 +1391,7 @@ function AuditsSection({ stats, chartData }: { stats: ReportStats; chartData: an
     { i: "audit-total", x: 0, y: 0, w: 3, h: 2, minW: 2, minH: 2, static: false },
     { i: "audit-completed", x: 3, y: 0, w: 3, h: 2, minW: 2, minH: 2, static: false },
   ];
-  
+
   const [layouts, setLayouts] = useState<{ [key: string]: any[] }>(() => {
     try {
       const saved = localStorage.getItem('hse_layout_audits');
@@ -1357,7 +1475,7 @@ function IncidentsSection({ stats, chartData }: { stats: ReportStats; chartData:
     { i: "incident-open", x: 3, y: 0, w: 3, h: 2, minW: 2, minH: 2, static: false },
     { i: "incident-closed", x: 6, y: 0, w: 3, h: 2, minW: 2, minH: 2, static: false },
   ];
-  
+
   const [layouts, setLayouts] = useState<{ [key: string]: any[] }>(() => {
     try {
       const saved = localStorage.getItem('hse_layout_incidents');
@@ -1457,7 +1575,7 @@ function TrainingsSection({
     { i: "training-total", x: 0, y: 0, w: 3, h: 2, minW: 2, minH: 2, static: false },
     { i: "training-compliance", x: 3, y: 0, w: 3, h: 2, minW: 2, minH: 2, static: false },
   ];
-  
+
   const [layouts, setLayouts] = useState<{ [key: string]: any[] }>(() => {
     try {
       const saved = localStorage.getItem('hse_layout_trainings');
@@ -1607,7 +1725,7 @@ function MeasuresSection({ stats, chartData }: { stats: ReportStats; chartData: 
     { i: "measures-completed", x: 3, y: 0, w: 3, h: 2, minW: 2, minH: 2, static: false },
     { i: "measures-progress", x: 6, y: 0, w: 3, h: 2, minW: 2, minH: 2, static: false },
   ];
-  
+
   const [layouts, setLayouts] = useState<{ [key: string]: any[] }>(() => {
     try {
       const saved = localStorage.getItem('hse_layout_measures');
@@ -1699,7 +1817,7 @@ function TasksSection({ stats, chartData }: { stats: ReportStats; chartData: any
     { i: "tasks-total", x: 0, y: 0, w: 3, h: 2, minW: 2, minH: 2, static: false },
     { i: "tasks-completed", x: 3, y: 0, w: 3, h: 2, minW: 2, minH: 2, static: false },
   ];
-  
+
   const [layouts, setLayouts] = useState<{ [key: string]: any[] }>(() => {
     try {
       const saved = localStorage.getItem('hse_layout_tasks');
@@ -1781,7 +1899,7 @@ function CheckupsSection({ stats }: { stats: ReportStats }) {
   const defaultLayout = [
     { i: "checkups-total", x: 0, y: 0, w: 3, h: 2, minW: 2, minH: 2, static: false },
   ];
-  
+
   const [layouts, setLayouts] = useState<{ [key: string]: any[] }>(() => {
     try {
       const saved = localStorage.getItem('hse_layout_checkups');
