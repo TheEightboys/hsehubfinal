@@ -39,6 +39,7 @@ import {
     FileEdit,
     Key,
     Plus,
+    ShoppingCart,
 } from "lucide-react";
 import {
     Dialog,
@@ -51,6 +52,14 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
 
 interface Company {
     id: string;
@@ -125,6 +134,16 @@ export default function CompanyDetail() {
     const [correctionReason, setCorrectionReason] = useState("");
     const [correctionAmount, setCorrectionAmount] = useState("");
 
+    // Add-on assignment states
+    const [isAssignDialogOpen, setIsAssignDialogOpen] = useState(false);
+    const [availableAddons, setAvailableAddons] = useState<any[]>([]);
+    const [assignForm, setAssignForm] = useState({
+        addon_id: "",
+        billing_cycle: "monthly",
+        quantity: 1,
+        auto_renew: true,
+    });
+
 
 
     useEffect(() => {
@@ -148,6 +167,7 @@ export default function CompanyDetail() {
                 fetchSubscriptionHistory(),
                 fetchAddons(),
                 fetchAuditLogs(),
+                fetchAvailableAddons(),
             ]);
         } catch (error: any) {
             toast({
@@ -272,6 +292,91 @@ export default function CompanyDetail() {
             return;
         }
         setAuditLogs(data || []);
+    };
+
+    const fetchAvailableAddons = async () => {
+        const { data, error } = await supabase
+            .from("addon_definitions")
+            .select("*")
+            .eq("is_active", true)
+            .order("name");
+
+        if (error) {
+            console.error("Available addons error:", error);
+            setAvailableAddons([]);
+            return;
+        }
+        setAvailableAddons(data || []);
+    };
+
+    const handleAssignAddon = async () => {
+        if (!assignForm.addon_id) {
+            toast({
+                title: "Error",
+                description: "Please select an add-on",
+                variant: "destructive",
+            });
+            return;
+        }
+
+        try {
+            const selectedAddon = availableAddons.find(a => a.id === assignForm.addon_id);
+            const price = assignForm.billing_cycle === "yearly"
+                ? selectedAddon?.price_yearly
+                : selectedAddon?.billing_type === "one_time"
+                    ? selectedAddon?.price_one_time
+                    : selectedAddon?.price_monthly;
+
+            const { error } = await supabase
+                .from("company_addons")
+                .insert({
+                    company_id: id,
+                    addon_id: assignForm.addon_id,
+                    billing_cycle: assignForm.billing_cycle,
+                    quantity: assignForm.quantity,
+                    price_paid: price || 0,
+                    auto_renew: assignForm.auto_renew,
+                    status: "active",
+                    start_date: new Date().toISOString(),
+                });
+
+            if (error) throw error;
+
+            toast({ title: "Success", description: "Add-on assigned to company" });
+            setIsAssignDialogOpen(false);
+            setAssignForm({ addon_id: "", billing_cycle: "monthly", quantity: 1, auto_renew: true });
+            fetchAddons(); // Refresh the list
+        } catch (error: any) {
+            toast({
+                title: "Error",
+                description: error.message,
+                variant: "destructive",
+            });
+        }
+    };
+
+    const getUserActivityStatus = () => {
+        if (users.length === 0) {
+            return { label: "inactive", color: "red", dotClass: "bg-red-500" };
+        }
+
+        const activeUsers = users.filter(u => u.last_login_at);
+        const activeRatio = activeUsers.length / users.length;
+
+        // Check for trial/subscription expiry
+        const daysUntilExpiry = company?.trial_ends_at
+            ? Math.ceil((new Date(company.trial_ends_at).getTime() - Date.now()) / (1000 * 60 * 60 * 24))
+            : null;
+
+        if (daysUntilExpiry !== null && daysUntilExpiry <= 7 && daysUntilExpiry > 0) {
+            return { label: "about to expire", color: "yellow", dotClass: "bg-yellow-500" };
+        }
+
+        if (activeRatio < 0.3) {
+            return { label: "inactive", color: "red", dotClass: "bg-red-500" };
+        }
+
+        return { label: "active & healthy", color: "green", dotClass: "bg-green-500" };
     };
 
     const handleBlockCompany = async () => {
@@ -652,13 +757,11 @@ export default function CompanyDetail() {
                                     <p className="text-xl font-bold capitalize">{company.subscription_tier}</p>
                                 </div>
                                 <div>
-                                    <Label className="text-muted-foreground text-sm">
-                                        {company.subscription_status === "trial" ? "Trial Ends" : "Subscription Status"}
-                                    </Label>
+                                    <Label className="text-muted-foreground text-sm">Subscription & Trial</Label>
                                     {company.subscription_status === "trial" ? (
                                         <>
                                             <p className="text-xl font-bold text-orange-600 dark:text-orange-400">
-                                                {company.trial_ends_at
+                                                Trial - Ends {company.trial_ends_at
                                                     ? new Date(company.trial_ends_at).toLocaleDateString()
                                                     : "Not set"}
                                             </p>
@@ -668,10 +771,22 @@ export default function CompanyDetail() {
                                                 </p>
                                             )}
                                         </>
+                                    ) : company.subscription_status === "canceled" ? (
+                                        <>
+                                            <p className="text-xl font-bold text-red-600 dark:text-red-400">Canceled</p>
+                                            <p className="text-sm text-red-600 dark:text-red-400">
+                                                Access ends on {company.trial_ends_at ? new Date(company.trial_ends_at).toLocaleDateString() : "N/A"}
+                                            </p>
+                                        </>
                                     ) : (
-                                        <p className="text-xl font-bold capitalize text-green-600 dark:text-green-400">
-                                            {company.subscription_status}
-                                        </p>
+                                        <>
+                                            <p className="text-xl font-bold capitalize text-green-600 dark:text-green-400">
+                                                {company.subscription_status}
+                                            </p>
+                                            <p className="text-sm text-green-600 dark:text-green-400">
+                                                {company.subscription_tier} subscription active
+                                            </p>
+                                        </>
                                     )}
                                 </div>
                                 <div>
@@ -716,19 +831,18 @@ export default function CompanyDetail() {
 
                         <Card>
                             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                                <CardTitle className="text-sm font-medium">Created</CardTitle>
-                                <Clock className="h-4 w-4 text-muted-foreground" />
+                                <CardTitle className="text-sm font-medium">User Activity</CardTitle>
+                                <Activity className="h-4 w-4 text-muted-foreground" />
                             </CardHeader>
                             <CardContent>
-                                <div className="text-2xl font-bold">
-                                    {new Date(company.created_at).toLocaleDateString()}
+                                <div className="flex items-center gap-3">
+                                    <div className={`w-4 h-4 rounded-full ${getUserActivityStatus().dotClass}`} />
+                                    <div className="text-xl font-bold capitalize">
+                                        {getUserActivityStatus().label}
+                                    </div>
                                 </div>
-                                <p className="text-xs text-muted-foreground">
-                                    {Math.floor(
-                                        (Date.now() - new Date(company.created_at).getTime()) /
-                                        (1000 * 60 * 60 * 24)
-                                    )}{" "}
-                                    days ago
+                                <p className="text-xs text-muted-foreground mt-2">
+                                    {users.filter(u => u.last_login_at).length} of {users.length} users active
                                 </p>
                             </CardContent>
                         </Card>
@@ -960,12 +1074,10 @@ export default function CompanyDetail() {
                                     </CardTitle>
                                     <CardDescription>Modules and add-ons enabled for this company</CardDescription>
                                 </div>
-                                <Link to="/super-admin/addons">
-                                    <Button variant="outline">
-                                        <Plus className="w-4 h-4 mr-2" />
-                                        Add Module
-                                    </Button>
-                                </Link>
+                                <Button onClick={() => setIsAssignDialogOpen(true)}>
+                                    <ShoppingCart className="w-4 h-4 mr-2" />
+                                    Assign Add-on
+                                </Button>
                             </div>
                         </CardHeader>
                         <CardContent>
@@ -976,12 +1088,10 @@ export default function CompanyDetail() {
                                     <p className="text-muted-foreground mb-4">
                                         This company has no add-ons or modules enabled yet.
                                     </p>
-                                    <Link to="/super-admin/addons">
-                                        <Button>
-                                            <Plus className="w-4 h-4 mr-2" />
-                                            Add Module to Company
-                                        </Button>
-                                    </Link>
+                                    <Button onClick={() => setIsAssignDialogOpen(true)}>
+                                        <ShoppingCart className="w-4 h-4 mr-2" />
+                                        Assign Add-on to Company
+                                    </Button>
                                 </div>
                             ) : (
                                 <Table>
@@ -1239,6 +1349,99 @@ export default function CompanyDetail() {
                         </Button>
                         <Button onClick={handleInvoiceCorrection}>
                             Submit Correction
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            {/* Assign Add-on Dialog */}
+            <Dialog open={isAssignDialogOpen} onOpenChange={setIsAssignDialogOpen}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Assign Add-on to Company</DialogTitle>
+                        <DialogDescription>
+                            Assign an add-on module to {company?.name}
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    <div className="grid gap-4 py-4">
+                        <div className="space-y-2">
+                            <Label>Company</Label>
+                            <Input value={company?.name || ""} disabled className="bg-muted" />
+                        </div>
+
+                        <div className="space-y-2">
+                            <Label>Add-on *</Label>
+                            <Select
+                                value={assignForm.addon_id}
+                                onValueChange={(value) => setAssignForm({ ...assignForm, addon_id: value })}
+                            >
+                                <SelectTrigger>
+                                    <SelectValue placeholder="Select an add-on..." />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {availableAddons.map((addon) => (
+                                        <SelectItem key={addon.id} value={addon.id}>
+                                            {addon.name} - €{addon.price_monthly}/mo
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                            {availableAddons.length === 0 && (
+                                <p className="text-xs text-muted-foreground">
+                                    No add-ons available. Create add-ons in the Add-ons Management section first.
+                                </p>
+                            )}
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-4">
+                            <div className="space-y-2">
+                                <Label>Billing Cycle</Label>
+                                <Select
+                                    value={assignForm.billing_cycle}
+                                    onValueChange={(value) => setAssignForm({ ...assignForm, billing_cycle: value })}
+                                >
+                                    <SelectTrigger>
+                                        <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="monthly">Monthly</SelectItem>
+                                        <SelectItem value="yearly">Yearly</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                            <div className="space-y-2">
+                                <Label>Quantity</Label>
+                                <Input
+                                    type="number"
+                                    min="1"
+                                    value={assignForm.quantity}
+                                    onChange={(e) => setAssignForm({ ...assignForm, quantity: parseInt(e.target.value) || 1 })}
+                                />
+                            </div>
+                        </div>
+
+                        <div className="flex items-center space-x-2">
+                            <Switch
+                                checked={assignForm.auto_renew}
+                                onCheckedChange={(checked) => setAssignForm({ ...assignForm, auto_renew: checked })}
+                            />
+                            <Label>Auto-renew subscription</Label>
+                        </div>
+                    </div>
+
+                    <DialogFooter>
+                        <Button
+                            variant="outline"
+                            onClick={() => {
+                                setIsAssignDialogOpen(false);
+                                setAssignForm({ addon_id: "", billing_cycle: "monthly", quantity: 1, auto_renew: true });
+                            }}
+                        >
+                            Cancel
+                        </Button>
+                        <Button onClick={handleAssignAddon} disabled={!assignForm.addon_id}>
+                            Assign Add-on
                         </Button>
                     </DialogFooter>
                 </DialogContent>

@@ -30,6 +30,16 @@ import {
 } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
+    Dialog,
+    DialogContent,
+    DialogHeader,
+    DialogTitle,
+    DialogDescription,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
+import {
     Headphones,
     AlertCircle,
     CheckCircle2,
@@ -81,6 +91,15 @@ export default function Support() {
     const [priorityFilter, setPriorityFilter] = useState("all");
     const [categoryFilter, setCategoryFilter] = useState("all");
     const [activeTab, setActiveTab] = useState("tickets");
+
+    // Edit ticket state
+    const [editingTicket, setEditingTicket] = useState<SupportTicket | null>(null);
+    const [editForm, setEditForm] = useState({
+        status: "",
+        priority: "",
+        admin_notes: "",
+    });
+    const [isSavingTicket, setIsSavingTicket] = useState(false);
 
     const [stats, setStats] = useState({
         total: 0,
@@ -210,6 +229,51 @@ export default function Support() {
             });
         } catch (error) {
             console.error("Error fetching stats:", error);
+        }
+    };
+
+    // Open edit dialog with ticket data
+    const openEditDialog = (ticket: SupportTicket) => {
+        setEditingTicket(ticket);
+        setEditForm({
+            status: ticket.status,
+            priority: ticket.priority,
+            admin_notes: "",
+        });
+    };
+
+    // Update ticket
+    const updateTicket = async () => {
+        if (!editingTicket) return;
+
+        setIsSavingTicket(true);
+        try {
+            const { error } = await supabase
+                .from("support_tickets")
+                .update({
+                    status: editForm.status,
+                    priority: editForm.priority,
+                })
+                .eq("id", editingTicket.id);
+
+            if (error) throw error;
+
+            toast({
+                title: "Ticket Updated",
+                description: "The support ticket has been updated successfully.",
+            });
+
+            setEditingTicket(null);
+            fetchTickets();
+            fetchStats();
+        } catch (error: any) {
+            toast({
+                title: "Error",
+                description: error.message || "Failed to update ticket",
+                variant: "destructive",
+            });
+        } finally {
+            setIsSavingTicket(false);
         }
     };
 
@@ -526,7 +590,7 @@ export default function Support() {
                                                     </TableCell>
                                                     <TableCell>{new Date(ticket.created_at).toLocaleDateString()}</TableCell>
                                                     <TableCell className="text-right">
-                                                        <Button variant="ghost" size="sm">View</Button>
+                                                        <Button variant="ghost" size="sm" onClick={() => openEditDialog(ticket)}>Edit</Button>
                                                     </TableCell>
                                                 </TableRow>
                                             ))
@@ -658,6 +722,79 @@ export default function Support() {
                     </Card>
                 </TabsContent>
             </Tabs>
+
+            {/* Edit Ticket Dialog */}
+            <Dialog open={!!editingTicket} onOpenChange={(open) => !open && setEditingTicket(null)}>
+                <DialogContent className="max-w-lg">
+                    <DialogHeader>
+                        <DialogTitle>Edit Support Ticket</DialogTitle>
+                        <DialogDescription>
+                            Update the status and priority of this ticket.
+                        </DialogDescription>
+                    </DialogHeader>
+                    {editingTicket && (
+                        <div className="space-y-4">
+                            <div>
+                                <Label className="text-muted-foreground text-xs">Ticket</Label>
+                                <p className="font-medium">{editingTicket.title}</p>
+                                <p className="text-sm text-muted-foreground mt-1">{editingTicket.description}</p>
+                            </div>
+                            <div>
+                                <Label className="text-muted-foreground text-xs">Company</Label>
+                                <p className="font-medium">{editingTicket.companies?.name || "N/A"}</p>
+                            </div>
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <Label>Status</Label>
+                                    <Select
+                                        value={editForm.status}
+                                        onValueChange={(value) =>
+                                            setEditForm((prev) => ({ ...prev, status: value }))
+                                        }
+                                    >
+                                        <SelectTrigger>
+                                            <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="open">Open</SelectItem>
+                                            <SelectItem value="in_progress">In Progress</SelectItem>
+                                            <SelectItem value="resolved">Resolved</SelectItem>
+                                            <SelectItem value="closed">Closed</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                                <div>
+                                    <Label>Priority</Label>
+                                    <Select
+                                        value={editForm.priority}
+                                        onValueChange={(value) =>
+                                            setEditForm((prev) => ({ ...prev, priority: value }))
+                                        }
+                                    >
+                                        <SelectTrigger>
+                                            <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="low">Low</SelectItem>
+                                            <SelectItem value="medium">Medium</SelectItem>
+                                            <SelectItem value="high">High</SelectItem>
+                                            <SelectItem value="urgent">Urgent</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                            </div>
+                            <div className="flex justify-end gap-2 pt-4">
+                                <Button variant="outline" onClick={() => setEditingTicket(null)}>
+                                    Cancel
+                                </Button>
+                                <Button onClick={updateTicket} disabled={isSavingTicket}>
+                                    {isSavingTicket ? "Saving..." : "Save Changes"}
+                                </Button>
+                            </div>
+                        </div>
+                    )}
+                </DialogContent>
+            </Dialog>
         </div>
     );
 }
