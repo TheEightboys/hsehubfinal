@@ -32,6 +32,7 @@ import {
   ChevronRight,
   Mail,
   Send,
+  Headphones,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -161,6 +162,16 @@ export default function Settings() {
     string[]
   >([]);
 
+  // Support Ticket State
+  const [ticketForm, setTicketForm] = useState({
+    category: "",
+    priority: "medium",
+    title: "",
+    description: "",
+  });
+  const [isSubmittingTicket, setIsSubmittingTicket] = useState(false);
+  const [myTickets, setMyTickets] = useState<any[]>([]);
+
   const predefinedISOs = [
     {
       id: "ISO_45001",
@@ -268,6 +279,7 @@ export default function Settings() {
       fetchISOStandards();
       fetchGInvestigations();
       fetchAllIsoCriteria();
+      fetchMyTickets();
     }
   }, [user, loading, navigate, companyId]);
 
@@ -588,6 +600,79 @@ export default function Settings() {
         description: err.message || "Failed to save G-Investigations",
         variant: "destructive",
       });
+    }
+  };
+
+  // Submit support ticket
+  const submitTicket = async () => {
+    if (!companyId) return;
+
+    if (!ticketForm.category || !ticketForm.title || !ticketForm.description) {
+      toast({
+        title: "Error",
+        description: "Please fill in all required fields",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsSubmittingTicket(true);
+    try {
+      const { error } = await supabase.from("support_tickets").insert([
+        {
+          company_id: companyId,
+          category: ticketForm.category,
+          priority: ticketForm.priority,
+          title: ticketForm.title,
+          description: ticketForm.description,
+          status: "open",
+        },
+      ]);
+
+      if (error) throw error;
+
+      toast({
+        title: "Ticket Submitted",
+        description: "Your support ticket has been submitted successfully. We'll get back to you soon!",
+      });
+
+      // Reset form
+      setTicketForm({
+        category: "",
+        priority: "medium",
+        title: "",
+        description: "",
+      });
+
+      // Refresh tickets list
+      fetchMyTickets();
+    } catch (err: any) {
+      toast({
+        title: "Error",
+        description: err.message || "Failed to submit ticket",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSubmittingTicket(false);
+    }
+  };
+
+  // Fetch tickets for this company
+  const fetchMyTickets = async () => {
+    if (!companyId) return;
+
+    try {
+      const { data, error } = await supabase
+        .from("support_tickets")
+        .select("*")
+        .eq("company_id", companyId)
+        .order("created_at", { ascending: false })
+        .limit(10);
+
+      if (error) throw error;
+      setMyTickets(data || []);
+    } catch (err: any) {
+      console.error("Error fetching tickets:", err);
     }
   };
 
@@ -1102,7 +1187,7 @@ export default function Settings() {
       // If not a valid number, default to section 7 (Verbesserung/Custom)
       const firstPart = newCriterionId.split(".")[0];
       const sectionNumber = /^[1-7]$/.test(firstPart) ? firstPart : "7";
-      
+
       // Get the section ID for this ISO and section number
       const { data: sectionData, error: sectionError } = await supabase
         .from("iso_criteria_sections")
@@ -1194,13 +1279,13 @@ export default function Settings() {
         ISO_50001: "ISO_50001",
       };
       const isoCode = isoCodeMap[activeISOForCriteria];
-      
+
       if (isoCode && isoCriteriaData[isoCode]) {
         const updatedSections = isoCriteriaData[isoCode].map((section: any) => ({
           ...section,
           subsections: section.subsections?.filter((sub: any) => sub.id !== subsectionId) || []
         }));
-        
+
         setIsoCriteriaData((prev: any) => ({
           ...prev,
           [isoCode]: updatedSections
@@ -1241,13 +1326,13 @@ export default function Settings() {
         ISO_50001: "ISO_50001",
       };
       const isoCode = isoCodeMap[activeISOForCriteria];
-      
+
       if (isoCode && isoCriteriaData[isoCode]) {
         const updatedSections = isoCriteriaData[isoCode].map((section: any) => ({
           ...section,
           subsections: section.subsections?.filter((sub: any) => !subsectionIds.includes(sub.id)) || []
         }));
-        
+
         setIsoCriteriaData((prev: any) => ({
           ...prev,
           [isoCode]: updatedSections
@@ -1278,7 +1363,7 @@ export default function Settings() {
 
         if (sectionsData && sectionsData.length > 0) {
           const sectionIds = sectionsData.map(s => s.id);
-          
+
           // Delete subsections where subsection_number starts with this prefix
           const { error } = await supabase
             .from("iso_criteria_subsections")
@@ -2272,11 +2357,10 @@ export default function Settings() {
                 <nav className="space-y-1">
                   <button
                     onClick={() => setActiveTab("team")}
-                    className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                      activeTab === "team"
-                        ? "bg-primary text-primary-foreground"
-                        : "hover:bg-muted text-muted-foreground"
-                    }`}
+                    className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${activeTab === "team"
+                      ? "bg-primary text-primary-foreground"
+                      : "hover:bg-muted text-muted-foreground"
+                      }`}
                   >
                     <Users className="w-4 h-4" />
                     <div className="text-left">
@@ -2289,11 +2373,10 @@ export default function Settings() {
 
                   <button
                     onClick={() => setActiveTab("user-roles")}
-                    className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                      activeTab === "user-roles"
-                        ? "bg-primary text-primary-foreground"
-                        : "hover:bg-muted text-muted-foreground"
-                    }`}
+                    className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${activeTab === "user-roles"
+                      ? "bg-primary text-primary-foreground"
+                      : "hover:bg-muted text-muted-foreground"
+                      }`}
                   >
                     <Shield className="w-4 h-4" />
                     <div className="text-left">
@@ -2306,11 +2389,10 @@ export default function Settings() {
 
                   <button
                     onClick={() => setActiveTab("configuration")}
-                    className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                      activeTab === "configuration"
-                        ? "bg-primary text-primary-foreground"
-                        : "hover:bg-muted text-muted-foreground"
-                    }`}
+                    className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${activeTab === "configuration"
+                      ? "bg-primary text-primary-foreground"
+                      : "hover:bg-muted text-muted-foreground"
+                      }`}
                   >
                     <SettingsIcon className="w-4 h-4" />
                     <div className="text-left">
@@ -2323,11 +2405,10 @@ export default function Settings() {
 
                   <button
                     onClick={() => setActiveTab("catalogs")}
-                    className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                      activeTab === "catalogs"
-                        ? "bg-primary text-primary-foreground"
-                        : "hover:bg-muted text-muted-foreground"
-                    }`}
+                    className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${activeTab === "catalogs"
+                      ? "bg-primary text-primary-foreground"
+                      : "hover:bg-muted text-muted-foreground"
+                      }`}
                   >
                     <BookOpen className="w-4 h-4" />
                     <div className="text-left">
@@ -2340,11 +2421,10 @@ export default function Settings() {
 
                   <button
                     onClick={() => setActiveTab("intervals")}
-                    className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                      activeTab === "intervals"
-                        ? "bg-primary text-primary-foreground"
-                        : "hover:bg-muted text-muted-foreground"
-                    }`}
+                    className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${activeTab === "intervals"
+                      ? "bg-primary text-primary-foreground"
+                      : "hover:bg-muted text-muted-foreground"
+                      }`}
                   >
                     <Clock className="w-4 h-4" />
                     <div className="text-left">
@@ -2357,11 +2437,10 @@ export default function Settings() {
 
                   <button
                     onClick={() => setActiveTab("medical-care")}
-                    className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                      activeTab === "medical-care"
-                        ? "bg-primary text-primary-foreground"
-                        : "hover:bg-muted text-muted-foreground"
-                    }`}
+                    className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${activeTab === "medical-care"
+                      ? "bg-primary text-primary-foreground"
+                      : "hover:bg-muted text-muted-foreground"
+                      }`}
                   >
                     <Stethoscope className="w-4 h-4" />
                     <div className="text-left">
@@ -2374,17 +2453,32 @@ export default function Settings() {
 
                   <button
                     onClick={() => setActiveTab("api-integration")}
-                    className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                      activeTab === "api-integration"
-                        ? "bg-primary text-primary-foreground"
-                        : "hover:bg-muted text-muted-foreground"
-                    }`}
+                    className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${activeTab === "api-integration"
+                      ? "bg-primary text-primary-foreground"
+                      : "hover:bg-muted text-muted-foreground"
+                      }`}
                   >
                     <Plug className="w-4 h-4" />
                     <div className="text-left">
                       <div>{t("settings.apiIntegration")}</div>
                       <div className="text-xs opacity-80">
                         {t("settings.apiIntegrationNav")}
+                      </div>
+                    </div>
+                  </button>
+
+                  <button
+                    onClick={() => setActiveTab("support")}
+                    className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${activeTab === "support"
+                      ? "bg-primary text-primary-foreground"
+                      : "hover:bg-muted text-muted-foreground"
+                      }`}
+                  >
+                    <Headphones className="w-4 h-4" />
+                    <div className="text-left">
+                      <div>Support</div>
+                      <div className="text-xs opacity-80">
+                        Submit a ticket
                       </div>
                     </div>
                   </button>
@@ -2566,7 +2660,7 @@ export default function Settings() {
                                               try {
                                                 const { data: { user } } = await supabase.auth.getUser();
                                                 const currentUserName = user?.user_metadata?.full_name || "Admin";
-                                                
+
                                                 await sendNoteNotification(
                                                   member.email,
                                                   `${member.first_name} ${member.last_name}`,
@@ -3635,11 +3729,10 @@ export default function Settings() {
                             {predefinedISOs.map((iso) => (
                               <div
                                 key={iso.id}
-                                className={`flex items-center gap-2 px-4 py-2 rounded border-2 cursor-pointer transition-colors ${
-                                  selectedISOs.includes(iso.id)
-                                    ? "bg-blue-600 text-white border-blue-600"
-                                    : "bg-white border-gray-300 hover:border-blue-400"
-                                }`}
+                                className={`flex items-center gap-2 px-4 py-2 rounded border-2 cursor-pointer transition-colors ${selectedISOs.includes(iso.id)
+                                  ? "bg-blue-600 text-white border-blue-600"
+                                  : "bg-white border-gray-300 hover:border-blue-400"
+                                  }`}
                                 onClick={async () => {
                                   const isSelected = selectedISOs.includes(
                                     iso.id
@@ -3676,7 +3769,7 @@ export default function Settings() {
                                   type="checkbox"
                                   id={iso.id}
                                   checked={selectedISOs.includes(iso.id)}
-                                  onChange={() => {}}
+                                  onChange={() => { }}
                                   className="w-4 h-4 cursor-pointer"
                                 />
                                 <label
@@ -3697,11 +3790,10 @@ export default function Settings() {
                             {customISOs.map((iso, index) => (
                               <div
                                 key={index}
-                                className={`flex items-center gap-2 px-4 py-2 rounded border-2 cursor-pointer transition-colors ${
-                                  selectedISOs.includes(iso)
-                                    ? "bg-white text-black border-gray-400"
-                                    : "bg-white border-gray-300"
-                                }`}
+                                className={`flex items-center gap-2 px-4 py-2 rounded border-2 cursor-pointer transition-colors ${selectedISOs.includes(iso)
+                                  ? "bg-white text-black border-gray-400"
+                                  : "bg-white border-gray-300"
+                                  }`}
                               >
                                 <input
                                   type="checkbox"
@@ -3835,11 +3927,10 @@ export default function Settings() {
                                         key={isoId}
                                         variant="outline"
                                         size="sm"
-                                        className={`${
-                                          isActive
-                                            ? "bg-blue-600 text-white hover:bg-blue-700 border-blue-600"
-                                            : "bg-white text-gray-700 hover:bg-gray-100 border-gray-300"
-                                        }`}
+                                        className={`${isActive
+                                          ? "bg-blue-600 text-white hover:bg-blue-700 border-blue-600"
+                                          : "bg-white text-gray-700 hover:bg-gray-100 border-gray-300"
+                                          }`}
                                         onClick={() => setActiveISOForCriteria(isoId)}
                                       >
                                         {displayName}
@@ -4033,14 +4124,14 @@ export default function Settings() {
                                             setExpandedSections((prev) =>
                                               isExpanded
                                                 ? prev.filter(
-                                                    (k) =>
-                                                      k !==
-                                                      `${isoCode}-${sectionNum}`
-                                                  )
+                                                  (k) =>
+                                                    k !==
+                                                    `${isoCode}-${sectionNum}`
+                                                )
                                                 : [
-                                                    ...prev,
-                                                    `${isoCode}-${sectionNum}`,
-                                                  ]
+                                                  ...prev,
+                                                  `${isoCode}-${sectionNum}`,
+                                                ]
                                             );
                                           }}
                                         >
@@ -4056,12 +4147,12 @@ export default function Settings() {
                                               const newCriteria = e.target
                                                 .checked
                                                 ? [
-                                                    ...selectedCriteria,
-                                                    criteriaId,
-                                                  ]
+                                                  ...selectedCriteria,
+                                                  criteriaId,
+                                                ]
                                                 : selectedCriteria.filter(
-                                                    (id) => id !== criteriaId
-                                                  );
+                                                  (id) => id !== criteriaId
+                                                );
                                               setSelectedCriteria(newCriteria);
 
                                               // Auto-save to localStorage
@@ -4107,99 +4198,99 @@ export default function Settings() {
                                           subsections.map((subsection: any) => {
                                             const questionsExpanded = expandedQuestions.has(subsection.id);
                                             return (
-                                            <div key={subsection.id}>
-                                              <div 
-                                                className="flex items-start gap-3 px-3 py-2 pl-10 hover:bg-gray-50 border-b bg-gray-50/50 cursor-pointer"
-                                                onClick={() => {
-                                                  const newExpanded = new Set(expandedQuestions);
-                                                  if (questionsExpanded) {
-                                                    newExpanded.delete(subsection.id);
-                                                  } else {
-                                                    newExpanded.add(subsection.id);
-                                                  }
-                                                  setExpandedQuestions(newExpanded);
-                                                }}
-                                              >
-                                              <input
-                                                type="checkbox"
-                                                className="w-4 h-4 mt-1 cursor-pointer"
-                                                checked={selectedCriteria.includes(
-                                                  `${isoCode}-${subsection.id}`
-                                                )}
-                                                onChange={(e) => {
-                                                  const criteriaId = `${isoCode}-${subsection.id}`;
-                                                  const newCriteria = e.target
-                                                    .checked
-                                                    ? [
-                                                        ...selectedCriteria,
-                                                        criteriaId,
-                                                      ]
-                                                    : selectedCriteria.filter(
-                                                        (id) =>
-                                                          id !== criteriaId
-                                                      );
-                                                  setSelectedCriteria(
-                                                    newCriteria
-                                                  );
-
-                                                  // Auto-save to localStorage
-                                                  if (companyId) {
-                                                    localStorage.setItem(
-                                                      `selectedCriteria_${companyId}`,
-                                                      JSON.stringify(
+                                              <div key={subsection.id}>
+                                                <div
+                                                  className="flex items-start gap-3 px-3 py-2 pl-10 hover:bg-gray-50 border-b bg-gray-50/50 cursor-pointer"
+                                                  onClick={() => {
+                                                    const newExpanded = new Set(expandedQuestions);
+                                                    if (questionsExpanded) {
+                                                      newExpanded.delete(subsection.id);
+                                                    } else {
+                                                      newExpanded.add(subsection.id);
+                                                    }
+                                                    setExpandedQuestions(newExpanded);
+                                                  }}
+                                                >
+                                                  <input
+                                                    type="checkbox"
+                                                    className="w-4 h-4 mt-1 cursor-pointer"
+                                                    checked={selectedCriteria.includes(
+                                                      `${isoCode}-${subsection.id}`
+                                                    )}
+                                                    onChange={(e) => {
+                                                      const criteriaId = `${isoCode}-${subsection.id}`;
+                                                      const newCriteria = e.target
+                                                        .checked
+                                                        ? [
+                                                          ...selectedCriteria,
+                                                          criteriaId,
+                                                        ]
+                                                        : selectedCriteria.filter(
+                                                          (id) =>
+                                                            id !== criteriaId
+                                                        );
+                                                      setSelectedCriteria(
                                                         newCriteria
-                                                      )
-                                                    );
-                                                  }
-                                                }}
-                                              />
-                                              {subsection.questions && subsection.questions.length > 0 && (
-                                                <div className="text-gray-400">
-                                                  {questionsExpanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
-                                                </div>
-                                              )}
-                                              <div className="flex-1">
-                                                <div className="font-medium text-sm">
-                                                  {subsection.subsection_number}{" "}
-                                                  {language === "en"
-                                                    ? subsection.title_en ||
-                                                      subsection.title
-                                                    : subsection.title}
-                                                </div>
-                                              </div>
-                                              <Button
-                                                variant="ghost"
-                                                size="sm"
-                                                className="h-6 w-6 p-0 text-red-500 hover:text-red-700 hover:bg-red-50"
-                                                onClick={(e) => {
-                                                  e.stopPropagation();
-                                                  handleDeleteCriterion(subsection.id);
-                                                }}
-                                              >
-                                                <Trash2 className="w-4 h-4" />
-                                              </Button>
-                                            </div>
+                                                      );
 
-                                            {/* Questions under this subsection */}
-                                            {questionsExpanded && subsection.questions && subsection.questions.length > 0 && (
-                                              <div className="ml-16 border-l-2 border-gray-200 pl-4">
-                                                {subsection.questions.map((question: any) => (
-                                                  <div
-                                                    key={question.id}
-                                                    className="py-2 text-sm text-gray-600"
-                                                  >
-                                                    <span className="font-medium text-gray-400 mr-2">
-                                                      •
-                                                    </span>
-                                                    {language === "en"
-                                                      ? question.question_text_en || question.question_text
-                                                      : question.question_text}
+                                                      // Auto-save to localStorage
+                                                      if (companyId) {
+                                                        localStorage.setItem(
+                                                          `selectedCriteria_${companyId}`,
+                                                          JSON.stringify(
+                                                            newCriteria
+                                                          )
+                                                        );
+                                                      }
+                                                    }}
+                                                  />
+                                                  {subsection.questions && subsection.questions.length > 0 && (
+                                                    <div className="text-gray-400">
+                                                      {questionsExpanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+                                                    </div>
+                                                  )}
+                                                  <div className="flex-1">
+                                                    <div className="font-medium text-sm">
+                                                      {subsection.subsection_number}{" "}
+                                                      {language === "en"
+                                                        ? subsection.title_en ||
+                                                        subsection.title
+                                                        : subsection.title}
+                                                    </div>
                                                   </div>
-                                                ))}
+                                                  <Button
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    className="h-6 w-6 p-0 text-red-500 hover:text-red-700 hover:bg-red-50"
+                                                    onClick={(e) => {
+                                                      e.stopPropagation();
+                                                      handleDeleteCriterion(subsection.id);
+                                                    }}
+                                                  >
+                                                    <Trash2 className="w-4 h-4" />
+                                                  </Button>
+                                                </div>
+
+                                                {/* Questions under this subsection */}
+                                                {questionsExpanded && subsection.questions && subsection.questions.length > 0 && (
+                                                  <div className="ml-16 border-l-2 border-gray-200 pl-4">
+                                                    {subsection.questions.map((question: any) => (
+                                                      <div
+                                                        key={question.id}
+                                                        className="py-2 text-sm text-gray-600"
+                                                      >
+                                                        <span className="font-medium text-gray-400 mr-2">
+                                                          •
+                                                        </span>
+                                                        {language === "en"
+                                                          ? question.question_text_en || question.question_text
+                                                          : question.question_text}
+                                                      </div>
+                                                    ))}
+                                                  </div>
+                                                )}
                                               </div>
-                                            )}
-                                            </div>
-                                          );
+                                            );
                                           })}
                                       </div>
                                     );
@@ -4220,13 +4311,13 @@ export default function Settings() {
                                 value={newCriterionId}
                                 onChange={(e) => setNewCriterionId(e.target.value)}
                               />
-                              <Input 
-                                placeholder="Enter criterion title" 
-                                className="flex-1" 
+                              <Input
+                                placeholder="Enter criterion title"
+                                className="flex-1"
                                 value={newCriterionText}
                                 onChange={(e) => setNewCriterionText(e.target.value)}
                               />
-                              <Button 
+                              <Button
                                 className="bg-blue-600 hover:bg-blue-700 text-white"
                                 onClick={handleAddCustomCriterion}
                               >
@@ -4607,11 +4698,10 @@ export default function Settings() {
                             <input
                               type="checkbox"
                               id={item.code.replace(/\s/g, "-")}
-                              className={`w-4 h-4 cursor-pointer mt-1 flex-shrink-0 rounded border-2 transition-all ${
-                                selectedGInvestigations.includes(item.code)
-                                  ? "border-red-500 bg-red-500 text-white accent-red-500"
-                                  : "border-gray-300 hover:border-red-300"
-                              }`}
+                              className={`w-4 h-4 cursor-pointer mt-1 flex-shrink-0 rounded border-2 transition-all ${selectedGInvestigations.includes(item.code)
+                                ? "border-red-500 bg-red-500 text-white accent-red-500"
+                                : "border-gray-300 hover:border-red-300"
+                                }`}
                               checked={selectedGInvestigations.includes(
                                 item.code
                               )}
@@ -4619,18 +4709,16 @@ export default function Settings() {
                             />
                             <label
                               htmlFor={item.code.replace(/\s/g, "-")}
-                              className={`text-sm cursor-pointer flex-1 transition-colors ${
-                                selectedGInvestigations.includes(item.code)
-                                  ? "text-foreground font-medium"
-                                  : "text-muted-foreground"
-                              }`}
+                              className={`text-sm cursor-pointer flex-1 transition-colors ${selectedGInvestigations.includes(item.code)
+                                ? "text-foreground font-medium"
+                                : "text-muted-foreground"
+                                }`}
                             >
                               <span
-                                className={`font-medium ${
-                                  selectedGInvestigations.includes(item.code)
-                                    ? "text-red-600"
-                                    : ""
-                                }`}
+                                className={`font-medium ${selectedGInvestigations.includes(item.code)
+                                  ? "text-red-600"
+                                  : ""
+                                  }`}
                               >
                                 {item.code}
                               </span>{" "}
@@ -4747,6 +4835,181 @@ export default function Settings() {
                     </div>
                   </CardContent>
                 </Card>
+              </TabsContent>
+
+              {/* Tab 8: Support */}
+              <TabsContent value="support">
+                <div className="space-y-6">
+                  {/* Submit Ticket Card */}
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2">
+                        <Headphones className="w-5 h-5" />
+                        Submit a Support Ticket
+                      </CardTitle>
+                      <CardDescription>
+                        Having an issue? Submit a ticket and our team will help you.
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="space-y-4">
+                        <div className="grid grid-cols-2 gap-4">
+                          <div>
+                            <Label>Category *</Label>
+                            <Select
+                              value={ticketForm.category}
+                              onValueChange={(value) =>
+                                setTicketForm((prev) => ({ ...prev, category: value }))
+                              }
+                            >
+                              <SelectTrigger>
+                                <SelectValue placeholder="Select category" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="login_issue">Login Issue</SelectItem>
+                                <SelectItem value="payment_error">Payment Error</SelectItem>
+                                <SelectItem value="bug">Bug Report</SelectItem>
+                                <SelectItem value="feature_request">Feature Request</SelectItem>
+                                <SelectItem value="performance">Performance Issue</SelectItem>
+                                <SelectItem value="other">Other</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div>
+                            <Label>Priority</Label>
+                            <Select
+                              value={ticketForm.priority}
+                              onValueChange={(value) =>
+                                setTicketForm((prev) => ({ ...prev, priority: value }))
+                              }
+                            >
+                              <SelectTrigger>
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="low">Low</SelectItem>
+                                <SelectItem value="medium">Medium</SelectItem>
+                                <SelectItem value="high">High</SelectItem>
+                                <SelectItem value="urgent">Urgent</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        </div>
+                        <div>
+                          <Label>Title *</Label>
+                          <Input
+                            placeholder="Brief summary of your issue"
+                            value={ticketForm.title}
+                            onChange={(e) =>
+                              setTicketForm((prev) => ({ ...prev, title: e.target.value }))
+                            }
+                          />
+                        </div>
+                        <div>
+                          <Label>Description *</Label>
+                          <Textarea
+                            placeholder="Please describe your issue in detail. Include any error messages, steps to reproduce, etc."
+                            rows={5}
+                            value={ticketForm.description}
+                            onChange={(e) =>
+                              setTicketForm((prev) => ({ ...prev, description: e.target.value }))
+                            }
+                          />
+                        </div>
+                        <div className="flex justify-end">
+                          <Button onClick={submitTicket} disabled={isSubmittingTicket}>
+                            {isSubmittingTicket ? (
+                              <>
+                                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                                Submitting...
+                              </>
+                            ) : (
+                              <>
+                                <Send className="w-4 h-4 mr-2" />
+                                Submit Ticket
+                              </>
+                            )}
+                          </Button>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  {/* My Tickets Card */}
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>My Recent Tickets</CardTitle>
+                      <CardDescription>
+                        Track the status of your submitted tickets
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="rounded-md border">
+                        <Table>
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead>Title</TableHead>
+                              <TableHead>Category</TableHead>
+                              <TableHead>Priority</TableHead>
+                              <TableHead>Status</TableHead>
+                              <TableHead>Created</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {myTickets.length === 0 ? (
+                              <TableRow>
+                                <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
+                                  <Headphones className="w-8 h-8 mx-auto mb-2 opacity-20" />
+                                  No tickets submitted yet
+                                </TableCell>
+                              </TableRow>
+                            ) : (
+                              myTickets.map((ticket) => (
+                                <TableRow key={ticket.id}>
+                                  <TableCell className="font-medium">{ticket.title}</TableCell>
+                                  <TableCell>
+                                    <Badge variant="outline">
+                                      {ticket.category?.replace("_", " ")}
+                                    </Badge>
+                                  </TableCell>
+                                  <TableCell>
+                                    <Badge
+                                      variant={
+                                        ticket.priority === "urgent"
+                                          ? "destructive"
+                                          : ticket.priority === "high"
+                                            ? "default"
+                                            : "secondary"
+                                      }
+                                    >
+                                      {ticket.priority}
+                                    </Badge>
+                                  </TableCell>
+                                  <TableCell>
+                                    <Badge
+                                      variant={
+                                        ticket.status === "open"
+                                          ? "destructive"
+                                          : ticket.status === "in_progress"
+                                            ? "secondary"
+                                            : "default"
+                                      }
+                                    >
+                                      {ticket.status?.replace("_", " ")}
+                                    </Badge>
+                                  </TableCell>
+                                  <TableCell>
+                                    {new Date(ticket.created_at).toLocaleDateString()}
+                                  </TableCell>
+                                </TableRow>
+                              ))
+                            )}
+                          </TableBody>
+                        </Table>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </div>
               </TabsContent>
             </Tabs>
           </div>
