@@ -3301,8 +3301,8 @@ export default function EmployeeProfile() {
                                           variant="ghost"
                                           size="sm"
                                           className={`h-6 px-2 text-xs ${note.likes?.includes(user?.id)
-                                              ? "text-primary bg-primary/10"
-                                              : "text-muted-foreground hover:text-foreground"
+                                            ? "text-primary bg-primary/10"
+                                            : "text-muted-foreground hover:text-foreground"
                                             }`}
                                           onClick={() => handleLikeNote(note.id)}
                                         >
@@ -3362,13 +3362,38 @@ export default function EmployeeProfile() {
                                                     }
                                                   );
 
-                                                  if (mentionedMember?.email) {
-                                                    await sendNoteNotification(
-                                                      mentionedMember.email,
-                                                      `${mentionedMember.first_name} ${mentionedMember.last_name}`,
-                                                      note.content,
-                                                      currentUserName
-                                                    );
+                                                  if (mentionedMember) {
+                                                    // Send email notification
+                                                    if (mentionedMember.email) {
+                                                      await sendNoteNotification(
+                                                        mentionedMember.email,
+                                                        `${mentionedMember.first_name} ${mentionedMember.last_name}`,
+                                                        note.content,
+                                                        currentUserName
+                                                      );
+                                                    }
+
+                                                    // Create in-app notification
+                                                    // Use user_id field from team_member, not the team_member id
+                                                    if (mentionedMember.user_id) {
+                                                      const { error: notifError } = await supabase.from("notifications").insert({
+                                                        user_id: mentionedMember.user_id,
+                                                        company_id: companyId,
+                                                        title: "You were mentioned in a note",
+                                                        message: `${currentUserName} mentioned you: ${note.content.substring(0, 100)}${note.content.length > 100 ? '...' : ''}`,
+                                                        type: "info",
+                                                        category: "system", // Must be valid: task, training, audit, incident, measure, risk, system
+                                                        is_read: false,
+                                                        related_id: employee?.id,
+                                                      });
+
+                                                      if (notifError) {
+                                                        console.error("Failed to create notification:", notifError);
+                                                      } else {
+                                                        console.log("In-app notification created for:", mentionedMember.first_name);
+                                                      }
+                                                    }
+
                                                     successCount++;
                                                   } else {
                                                     console.log(`No team member found for: "${mentionedName}"`);
