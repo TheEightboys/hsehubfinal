@@ -153,7 +153,7 @@ export function usePermissions() {
       if (roleData?.permissions) {
         const dbPermissions = roleData.permissions as Record<string, boolean>;
         logRBAC("DB Permissions object:", dbPermissions);
-        
+
         // Map database permissions to our extended permissions
         // STRICT: Only grant if explicitly true, never fallback to true
         const mappedPermissions: Permissions = {
@@ -164,11 +164,11 @@ export function usePermissions() {
           reports: dbPermissions.reports === true,
           audits: dbPermissions.audits === true,
           settings: dbPermissions.settings === true,
-          // Extended: derive from base permissions - still strict
-          riskAssessments: dbPermissions.riskAssessments === true || dbPermissions.audits === true,
-          investigations: dbPermissions.investigations === true || dbPermissions.audits === true,
-          incidents: dbPermissions.incidents === true || dbPermissions.audits === true,
-          trainings: dbPermissions.trainings === true || dbPermissions.employees === true,
+          // Extended permissions: Always granted to all users by default
+          riskAssessments: true,
+          investigations: true,
+          incidents: true,
+          trainings: true,
         };
 
         logRBAC("✅ Final mapped permissions:", mappedPermissions);
