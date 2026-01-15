@@ -488,9 +488,38 @@ export default function Reports() {
 
       switch (metric) {
         case "incidents":
-          // Special handling for incidents - use incident_date instead of created_at
+          // Special handling for incidents - support location via employee join
           {
-            // Determine which column to group by
+            // Handle location grouping - need to join with employees
+            if (groupBy === "location" || groupBy === "department") {
+              const { data, error } = await supabase
+                .from("incidents")
+                .select(`
+                  id,
+                  reported_by,
+                  employees!incidents_reported_by_fkey (
+                    location,
+                    department
+                  )
+                `)
+                .eq("company_id", companyId);
+
+              if (error) {
+                console.error("Error fetching incidents with location:", error);
+                return [];
+              }
+
+              // Group by location or department from employee
+              const grouped = (data || []).reduce((acc: Record<string, number>, item: any) => {
+                const key = item.employees?.[groupBy] || "Unknown";
+                acc[key] = (acc[key] || 0) + 1;
+                return acc;
+              }, {});
+
+              return Object.entries(grouped).map(([name, value]) => ({ name, value }));
+            }
+
+            // Standard incident grouping (status, type, severity)
             let incidentGroupCol = "investigation_status";
             if (groupBy === "category" || groupBy === "incident_type") {
               incidentGroupCol = "incident_type";
@@ -532,6 +561,7 @@ export default function Reports() {
           // Courses are catalog items, don't filter by date
           // Query all courses and group by name (each course is 1 item)
           {
+            console.log("Fetching trainings/courses for company:", companyId);
             const { data, error } = await supabase
               .from("courses")
               .select("id, name")
@@ -541,6 +571,7 @@ export default function Reports() {
               console.error("Error fetching courses data:", error);
               return [];
             }
+            console.log("Fetched courses:", data);
 
             // Return each course as a data point
             return (data || []).map(course => ({
@@ -660,7 +691,7 @@ export default function Reports() {
 
       setSelectedReport({
         ...template,
-        id: Date.now().toString(),
+        id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
         data, // Include actual fetched data
       } as ReportConfig);
       setIsLibraryOpen(false);
@@ -696,7 +727,8 @@ export default function Reports() {
       });
     }
 
-    saveCustomReports(updatedReports);
+    setCustomReports(updatedReports); // Update state FIRST for immediate UI refresh
+    saveCustomReports(updatedReports); // Then save to localStorage
     setIsBuilderOpen(false);
     setSelectedReport(null);
   };
@@ -709,10 +741,11 @@ export default function Reports() {
   const handleDuplicateReport = (config: ReportConfig) => {
     const duplicate = {
       ...config,
-      id: Date.now().toString(),
+      id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
       title: `${config.title} (Copy)`,
     };
     const updatedReports = [...customReports, duplicate];
+    setCustomReports(updatedReports); // Update state for immediate UI refresh
     saveCustomReports(updatedReports);
     toast({
       title: "Report Duplicated",
@@ -838,7 +871,19 @@ export default function Reports() {
         {/* Content Sections */}
         <div className="p-8">
           {activeSection === "overview" && (
-            <OverviewSection stats={stats} chartData={chartData} customReports={customReports} onEditReport={handleEditReport} onDuplicateReport={handleDuplicateReport} onDeleteReport={handleDeleteReport} onExportReport={handleExportReport} />
+            <OverviewSection
+              stats={stats}
+              chartData={chartData}
+              customReports={customReports}
+              onEditReport={handleEditReport}
+              onDuplicateReport={handleDuplicateReport}
+              onDeleteReport={handleDeleteReport}
+              onExportReport={handleExportReport}
+              onViewReport={(report) => {
+                setSelectedReport(report);
+                setIsBuilderOpen(true);
+              }}
+            />
           )}
           {activeSection === "risk-assessments" && (
             <RiskAssessmentsSection stats={stats} chartData={chartData} />
@@ -874,6 +919,10 @@ export default function Reports() {
         onSave={handleSaveReport}
         initialConfig={selectedReport}
         data={selectedReport?.data || []}
+        onRefreshData={async (config) => {
+          // Re-fetch data based on new config
+          return await fetchTemplateData(config);
+        }}
       />
 
       <ReportLibrary
@@ -941,12 +990,12 @@ const generateCustomReportsLayout = (reportCount: number) => {
   for (let i = 0; i < reportCount; i++) {
     layouts.push({
       i: `custom-report-${i}`,
-      x: (i % 3) * 4,
-      y: Math.floor(i / 3) * 6,
-      w: 4,
-      h: 6,
-      minW: 3,
-      minH: 4,
+      x: (i % 4) * 3,  // 4 columns for compact layout
+      y: Math.floor(i / 4) * 3,  // Reduced row spacing
+      w: 3,  // Width: 3 grid units
+      h: 3,  // Height: 3 grid units (180px) - very compact
+      minW: 2,  // Minimum width
+      minH: 2,  // Minimum height
       static: false,
     });
   }
@@ -960,7 +1009,8 @@ function OverviewSection({
   onEditReport,
   onDuplicateReport,
   onDeleteReport,
-  onExportReport
+  onExportReport,
+  onViewReport,
 }: {
   stats: ReportStats;
   chartData: any[];
@@ -969,6 +1019,7 @@ function OverviewSection({
   onDuplicateReport: (config: ReportConfig) => void;
   onDeleteReport: (id: string) => void;
   onExportReport: (config: ReportConfig) => void;
+  onViewReport: (config: ReportConfig) => void;
 }) {
   const { toast } = useToast();
   // Load layouts from localStorage or use defaults
@@ -1034,12 +1085,12 @@ function OverviewSection({
           for (let i = bpLayout.length; i < customReports.length; i++) {
             bpLayout.push({
               i: `custom-report-${i}`,
-              x: (i % 3) * 4,
-              y: Math.floor(i / 3) * 6, // Place below previous ones
-              w: 4,
-              h: 6,
-              minW: 3,
-              minH: 4,
+              x: (i % 4) * 3,  // 4 columns, width 3
+              y: Math.floor(i / 4) * 3,  // Reduced row spacing
+              w: 3,  // Width: 3 grid units
+              h: 3,  // Height: 3 grid units - compact
+              minW: 2,
+              minH: 2,
               static: false,
             });
           }
@@ -1243,56 +1294,24 @@ function OverviewSection({
         </div>
       </ResponsiveGridLayout>
 
-      {/* Custom Reports Grid */}
+      {/* Custom Reports - 2 Column Grid */}
       {customReports && customReports.length > 0 && (
         <div className="mt-12">
           <div className="flex items-center justify-between mb-4">
             <div>
               <h3 className="text-lg font-semibold">Custom Reports</h3>
-              <p className="text-sm text-muted-foreground">Drag to reposition, resize from corners</p>
+              <p className="text-sm text-muted-foreground">Click on any report to view details</p>
             </div>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => {
-                const defaultLayout = generateCustomReportsLayout(customReports.length);
-                const defaultLayouts = { lg: defaultLayout, md: defaultLayout, sm: defaultLayout };
-                setCustomReportsLayouts(defaultLayouts);
-                localStorage.removeItem(CUSTOM_REPORTS_LAYOUT_KEY);
-                toast({
-                  title: "Layout Reset",
-                  description: "Custom reports layout has been reset to default",
-                });
-              }}
-            >
-              <RotateCcw className="w-4 h-4 mr-2" />
-              Reset Layout
-            </Button>
           </div>
 
-          <ResponsiveGridLayout
-            className="layout"
-            layouts={customReportsLayouts}
-            breakpoints={{ lg: 1200, md: 996, sm: 768 }}
-            cols={{ lg: 12, md: 10, sm: 6 }}
-            rowHeight={70}
-            onLayoutChange={(currentLayout: any[], allLayouts: { [key: string]: any[] }) => {
-              setCustomReportsLayouts(allLayouts);
-              try {
-                localStorage.setItem(CUSTOM_REPORTS_LAYOUT_KEY, JSON.stringify(allLayouts));
-              } catch (error) {
-                console.error("Error saving custom reports layout:", error);
-              }
-            }}
-            draggableHandle=".drag-handle"
-            isResizable={true}
-            isDraggable={true}
-            margin={[20, 20]}
-            containerPadding={[0, 0]}
-            compactType="vertical"
-          >
+          {/* 2 Column Grid Layout */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {customReports.map((report, index) => (
-              <div key={`custom-report-${index}`}>
+              <div
+                key={`custom-report-${index}`}
+                className="cursor-pointer transition-transform hover:scale-[1.02]"
+                onClick={() => onViewReport(report)}
+              >
                 <ReportWidget
                   config={report}
                   onEdit={onEditReport}
@@ -1302,7 +1321,7 @@ function OverviewSection({
                 />
               </div>
             ))}
-          </ResponsiveGridLayout>
+          </div>
         </div>
       )}
     </div>
