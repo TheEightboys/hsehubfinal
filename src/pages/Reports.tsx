@@ -1294,7 +1294,7 @@ function OverviewSection({
         </div>
       </ResponsiveGridLayout>
 
-      {/* Custom Reports - Horizontal Scroll */}
+      {/* Custom Reports - 2 Column Grid */}
       {customReports && customReports.length > 0 && (
         <div className="mt-12">
           <div className="flex items-center justify-between mb-4">
@@ -1304,25 +1304,23 @@ function OverviewSection({
             </div>
           </div>
 
-          {/* Horizontal Scrolling Container */}
-          <div className="overflow-x-auto pb-4">
-            <div className="flex gap-4 min-w-min">
-              {customReports.map((report, index) => (
-                <div
-                  key={`custom-report-${index}`}
-                  className="flex-shrink-0 w-80 cursor-pointer transition-transform hover:scale-105"
-                  onClick={() => onViewReport(report)}
-                >
-                  <ReportWidget
-                    config={report}
-                    onEdit={onEditReport}
-                    onDuplicate={onDuplicateReport}
-                    onDelete={onDeleteReport}
-                    onExport={onExportReport}
-                  />
-                </div>
-              ))}
-            </div>
+          {/* 2 Column Grid Layout */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {customReports.map((report, index) => (
+              <div
+                key={`custom-report-${index}`}
+                className="cursor-pointer transition-transform hover:scale-[1.02]"
+                onClick={() => onViewReport(report)}
+              >
+                <ReportWidget
+                  config={report}
+                  onEdit={onEditReport}
+                  onDuplicate={onDuplicateReport}
+                  onDelete={onDeleteReport}
+                  onExport={onExportReport}
+                />
+              </div>
+            ))}
           </div>
         </div>
       )}
