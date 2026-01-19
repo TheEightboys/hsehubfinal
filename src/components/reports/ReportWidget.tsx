@@ -92,7 +92,7 @@ export default function ReportWidget({
               <CartesianGrid strokeDasharray="3 3" vertical={false} />
               <XAxis
                 dataKey="name"
-                tick={{ fontSize: 10, angle: -45, textAnchor: 'end' }}
+                tick={{ fontSize: 10, angle: -45, textAnchor: 'end' } as any}
                 tickLine={false}
                 axisLine={false}
                 interval={0}
@@ -117,7 +117,7 @@ export default function ReportWidget({
               <CartesianGrid strokeDasharray="3 3" vertical={false} />
               <XAxis
                 dataKey="name"
-                tick={{ fontSize: 10, angle: -45, textAnchor: 'end' }}
+                tick={{ fontSize: 10, angle: -45, textAnchor: 'end' } as any}
                 tickLine={false}
                 axisLine={false}
                 height={60}
