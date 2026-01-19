@@ -40,6 +40,7 @@ import {
     Key,
     Plus,
     ShoppingCart,
+    Trash2,
 } from "lucide-react";
 import {
     Dialog,
@@ -139,6 +140,10 @@ export default function CompanyDetail() {
     const [selectedUserForReset, setSelectedUserForReset] = useState<CompanyUser | null>(null);
     const [newPassword, setNewPassword] = useState("");
 
+    // Delete user state
+    const [deleteUserDialogOpen, setDeleteUserDialogOpen] = useState(false);
+    const [userToDelete, setUserToDelete] = useState<CompanyUser | null>(null);
+
     const [invoiceCorrectionDialogOpen, setInvoiceCorrectionDialogOpen] = useState(false);
     const [correctionReason, setCorrectionReason] = useState("");
     const [correctionAmount, setCorrectionAmount] = useState("");
@@ -208,13 +213,19 @@ export default function CompanyDetail() {
     };
 
     const fetchUsers = async () => {
-        const { data: userRolesData, error: rolesError } = await supabase
+        let query = supabase
             .from("user_roles")
             .select("id, role, last_login_at, failed_login_count, created_at, user_id")
             .eq("company_id", id);
 
-        if (rolesError) throw rolesError;
+        // Filter out the current super admin user
+        if (user?.id) {
+            query = query.neq("user_id", user.id);
+        }
 
+        const { data: userRolesData, error: rolesError } = await query;
+
+        if (rolesError) throw rolesError;
         if (!userRolesData || userRolesData.length === 0) {
             setUsers([]);
             return;
@@ -232,6 +243,7 @@ export default function CompanyDetail() {
         if (profilesError) throw profilesError;
 
         // Join the data on the frontend
+        // Join the data on the frontend
         const transformedUsers = userRolesData.map((ur) => {
             const profile = profilesData?.find((p) => p.id === ur.user_id);
             return {
@@ -243,7 +255,7 @@ export default function CompanyDetail() {
                 failed_login_count: ur.failed_login_count || 0,
                 created_at: ur.created_at,
             };
-        });
+        }).filter((user) => user.email !== "N/A" && user.full_name !== "N/A");
 
         setUsers(transformedUsers);
     };
@@ -295,7 +307,8 @@ export default function CompanyDetail() {
     };
 
     const fetchAuditLogs = async () => {
-        const { data, error } = await supabase
+        // Build the query
+        let query = supabase
             .from("audit_logs")
             .select("*")
             .eq("company_id", id)
@@ -303,8 +316,15 @@ export default function CompanyDetail() {
             .order("created_at", { ascending: false })
             .limit(20);
 
+        // Additionally filter out actions by the current super admin user if user context is available
+        if (user?.id) {
+            query = query.neq("actor_id", user.id);
+        }
+
+        const { data, error } = await query;
+
         if (error) {
-            console.error("Audit logs error:", error);
+            console.error("Audit logs logs error:", error);
             setAuditLogs([]);
             return;
         }
@@ -621,6 +641,44 @@ export default function CompanyDetail() {
             setResetPasswordDialogOpen(false);
             setSelectedUserForReset(null);
             setNewPassword("");
+        } catch (error: any) {
+            toast({
+                title: "Error",
+                description: error.message,
+                variant: "destructive",
+            });
+        }
+    };
+
+    const handleDeleteUser = async () => {
+        if (!userToDelete) return;
+
+        try {
+            const { error } = await supabase.auth.admin.deleteUser(userToDelete.id);
+
+            if (error) throw error;
+
+            // Create audit log
+            await supabase.rpc("create_audit_log", {
+                p_action_type: "delete_user",
+                p_target_type: "user",
+                p_target_id: userToDelete.id,
+                p_target_name: userToDelete.email,
+                p_details: {
+                    deleted_by: "super_admin",
+                    user_name: userToDelete.full_name,
+                },
+                p_company_id: id,
+            });
+
+            toast({
+                title: "Success",
+                description: `User ${userToDelete.email} deleted successfully`,
+            });
+
+            setDeleteUserDialogOpen(false);
+            setUserToDelete(null);
+            fetchUsers(); // Refresh list
         } catch (error: any) {
             toast({
                 title: "Error",
@@ -992,17 +1050,31 @@ export default function CompanyDetail() {
                                                 {new Date(user.created_at).toLocaleDateString()}
                                             </TableCell>
                                             <TableCell className="text-right">
-                                                <Button
-                                                    variant="ghost"
-                                                    size="sm"
-                                                    onClick={() => {
-                                                        setSelectedUserForReset(user);
-                                                        setResetPasswordDialogOpen(true);
-                                                    }}
-                                                >
-                                                    <Key className="w-4 h-4 mr-2" />
-                                                    Reset Password
-                                                </Button>
+                                                <div className="flex justify-end gap-2">
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="sm"
+                                                        onClick={() => {
+                                                            setSelectedUserForReset(user);
+                                                            setResetPasswordDialogOpen(true);
+                                                        }}
+                                                    >
+                                                        <Key className="w-4 h-4 mr-2" />
+                                                        Reset
+                                                    </Button>
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="sm"
+                                                        className="text-destructive hover:text-destructive/90 hover:bg-destructive/10"
+                                                        onClick={() => {
+                                                            setUserToDelete(user);
+                                                            setDeleteUserDialogOpen(true);
+                                                        }}
+                                                    >
+                                                        <Trash2 className="w-4 h-4 mr-2" />
+                                                        Delete
+                                                    </Button>
+                                                </div>
                                             </TableCell>
                                         </TableRow>
                                     ))}
@@ -1465,7 +1537,7 @@ export default function CompanyDetail() {
                 </DialogContent>
             </Dialog>
 
-            {/* Assign Add-on Dialog */}
+            {/* Sortable: false */}
             <Dialog open={isAssignDialogOpen} onOpenChange={setIsAssignDialogOpen}>
                 <DialogContent>
                     <DialogHeader>
@@ -1564,6 +1636,35 @@ export default function CompanyDetail() {
                         </Button>
                         <Button onClick={handleAssignAddon} disabled={!assignForm.addon_id}>
                             Assign Add-on
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            {/* Delete User Dialog */}
+            <Dialog open={deleteUserDialogOpen} onOpenChange={setDeleteUserDialogOpen}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Delete User</DialogTitle>
+                        <DialogDescription>
+                            Are you sure you want to delete {userToDelete?.full_name} ({userToDelete?.email})? This action cannot be undone.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <DialogFooter>
+                        <Button
+                            variant="outline"
+                            onClick={() => {
+                                setDeleteUserDialogOpen(false);
+                                setUserToDelete(null);
+                            }}
+                        >
+                            Cancel
+                        </Button>
+                        <Button
+                            variant="destructive"
+                            onClick={handleDeleteUser}
+                        >
+                            Delete User
                         </Button>
                     </DialogFooter>
                 </DialogContent>
