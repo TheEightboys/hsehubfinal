@@ -72,6 +72,16 @@ import {
 import ReportBuilder, { ReportConfig } from "@/components/reports/ReportBuilder";
 import ReportLibrary from "@/components/reports/ReportLibrary";
 import ReportWidget from "@/components/reports/ReportWidget";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 interface ReportStats {
   totalEmployees: number;
@@ -141,6 +151,7 @@ export default function Reports() {
   const [isBuilderOpen, setIsBuilderOpen] = useState(false);
   const [isLibraryOpen, setIsLibraryOpen] = useState(false);
   const [selectedReport, setSelectedReport] = useState<ReportConfig | null>(null);
+  const [reportToDelete, setReportToDelete] = useState<{ id: string; title: string } | null>(null);
 
   // Navigation sections
   const navSections: NavSection[] = [
@@ -770,24 +781,36 @@ export default function Reports() {
       ...config,
       id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
       title: `${config.title} (Copy)`,
+      data: config.data ? [...config.data] : [], // Deep copy the data array
     };
     const updatedReports = [...customReports, duplicate];
-    setCustomReports(updatedReports); // Update state for immediate UI refresh
-    saveCustomReports(updatedReports);
+    setCustomReports(updatedReports); // Update state FIRST for immediate UI refresh
+    saveCustomReports(updatedReports); // Then persist to localStorage
     toast({
       title: "Report Duplicated",
       description: `Created a copy of "${config.title}"`,
     });
+    // NOTE: Do NOT open builder - just create the copy silently
   };
 
   const handleDeleteReport = (id: string) => {
     const report = customReports.find(r => r.id === id);
-    const updatedReports = customReports.filter(r => r.id !== id);
+    if (!report) return;
+
+    // Set report to delete and open confirmation dialog
+    setReportToDelete({ id: report.id, title: report.title });
+  };
+
+  const confirmDeleteReport = () => {
+    if (!reportToDelete) return;
+
+    const updatedReports = customReports.filter(r => r.id !== reportToDelete.id);
     saveCustomReports(updatedReports);
     toast({
       title: "Report Deleted",
-      description: `"${report?.title}" has been removed`,
+      description: `"${reportToDelete.title}" has been removed`,
     });
+    setReportToDelete(null);
   };
 
   const handleExportReport = (config: ReportConfig) => {
@@ -957,6 +980,24 @@ export default function Reports() {
         onClose={() => setIsLibraryOpen(false)}
         onSelectTemplate={handleSelectTemplate}
       />
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={!!reportToDelete} onOpenChange={(open) => !open && setReportToDelete(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Report?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete "{reportToDelete?.title}"? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setReportToDelete(null)}>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmDeleteReport} className="bg-destructive hover:bg-destructive/90">
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
@@ -1009,20 +1050,20 @@ const SECTION_LAYOUT_KEYS = {
   customReports: "hse_layout_custom_reports",
 };
 
-const CUSTOM_REPORTS_LAYOUT_KEY = "hse_custom_reports_grid_layout_v2";
+const CUSTOM_REPORTS_LAYOUT_KEY = "hse_custom_reports_grid_layout_v3_2col"; // v3: 2-column layout
 
-// Generate default layout for custom reports based on the number of reports
+// Generate default layout for custom reports (2 per row for better visibility)
 const generateCustomReportsLayout = (reportCount: number) => {
   const layouts: any[] = [];
   for (let i = 0; i < reportCount; i++) {
     layouts.push({
       i: `custom-report-${i}`,
-      x: (i % 4) * 3,  // 4 columns for compact layout
-      y: Math.floor(i / 4) * 3,  // Reduced row spacing
-      w: 3,  // Width: 3 grid units
-      h: 3,  // Height: 3 grid units (180px) - very compact
-      minW: 2,  // Minimum width
-      minH: 2,  // Minimum height
+      x: (i % 2) * 6,  // 2 columns layout (50% width each)
+      y: Math.floor(i / 2) * 4,  // Row spacing
+      w: 6,  // Width: 6 grid units (50% of 12)
+      h: 4,  // Height: 4 units (280px)
+      minW: 4,  // Minimum width
+      minH: 3,  // Minimum height
       static: false,
     });
   }
@@ -1067,13 +1108,35 @@ function OverviewSection({
     try {
       const saved = localStorage.getItem(CUSTOM_REPORTS_LAYOUT_KEY);
       if (saved) {
-        return JSON.parse(saved);
+        const parsed = JSON.parse(saved);
+        // Validate that layout items match current reports (by ID)
+        const layoutKeys = new Set(parsed.lg?.map((item: any) => item.i) || []);
+        const reportKeys = new Set(customReports.map(r => `report-${r.id}`));
+
+        // If layouts don't match reports, regenerate
+        if (layoutKeys.size === reportKeys.size &&
+          [...reportKeys].every(key => layoutKeys.has(key))) {
+          return parsed;
+        }
       }
     } catch (error) {
       console.error("Error loading custom reports layout:", error);
     }
-    const defaultLayout = generateCustomReportsLayout(customReports.length);
-    return { lg: defaultLayout, md: defaultLayout, sm: defaultLayout };
+    // Generate layout using report IDs
+    const layouts: any[] = [];
+    customReports.forEach((report, index) => {
+      layouts.push({
+        i: `report-${report.id}`,
+        x: (index % 2) * 6,
+        y: Math.floor(index / 2) * 4,
+        w: 6,
+        h: 4,
+        minW: 4,
+        minH: 3,
+        static: false,
+      });
+    });
+    return { lg: layouts, md: layouts, sm: layouts };
   });
 
   // Save layouts to localStorage when they change
@@ -1105,8 +1168,11 @@ function OverviewSection({
     });
   }, [toast]);
 
-  // Sync custom reports layout when reports change (add/remove)
+  // Sync custom reports layout when reports change (add/remove/duplicate)
   useEffect(() => {
+    // Use a ref to prevent unnecessary recalculations
+    const reportIds = customReports.map(r => r.id).join(',');
+
     setCustomReportsLayouts(currentLayouts => {
       const newLayouts = { ...currentLayouts };
       const breakpoints = ['lg', 'md', 'sm'];
@@ -1115,30 +1181,36 @@ function OverviewSection({
       breakpoints.forEach(bp => {
         const bpLayout = [...(newLayouts[bp] || [])];
 
-        // Add specific layout items for new reports
-        if (customReports.length > bpLayout.length) {
-          hasChanges = true;
-          for (let i = bpLayout.length; i < customReports.length; i++) {
+        // Get existing layout item keys
+        const existingKeys = new Set(bpLayout.map(item => item.i));
+
+        // Add layout items for new reports (using report ID as key)
+        customReports.forEach((report, index) => {
+          const key = `report-${report.id}`;
+          if (!existingKeys.has(key)) {
+            hasChanges = true;
             bpLayout.push({
-              i: `custom-report-${i}`,
-              x: (i % 4) * 3,  // 4 columns, width 3
-              y: Math.floor(i / 4) * 3,  // Reduced row spacing
-              w: 3,  // Width: 3 grid units
-              h: 3,  // Height: 3 grid units - compact
-              minW: 2,
-              minH: 2,
+              i: key,  // Use report ID instead of index
+              x: (index % 2) * 6,  // 2 columns layout (50% width each)
+              y: Math.floor(index / 2) * 4,  // Row spacing
+              w: 6,  // Width: 6 grid units (50% of 12)
+              h: 4,  // Height: 4 units (280px)
+              minW: 4,  // Minimum width
+              minH: 3,  // Minimum height
               static: false,
             });
           }
-        }
-        // Handle removals
-        else if (customReports.length < bpLayout.length) {
+        });
+
+        // Remove layout items for deleted reports
+        const reportKeys = new Set(customReports.map(r => `report-${r.id}`));
+        const filteredLayout = bpLayout.filter(item => reportKeys.has(item.i));
+
+        if (filteredLayout.length !== bpLayout.length) {
           hasChanges = true;
-          newLayouts[bp] = bpLayout.slice(0, customReports.length);
-          return;
         }
 
-        newLayouts[bp] = bpLayout;
+        newLayouts[bp] = filteredLayout;
       });
 
       if (!hasChanges) return currentLayouts;
@@ -1152,15 +1224,12 @@ function OverviewSection({
 
       return newLayouts;
     });
-  }, [customReports.length]);
+  }, [customReports.map(r => r.id).join(',')]); // Use stable string dependency
 
   return (
     <div className="space-y-8">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-2xl font-bold mb-2">Overview</h2>
-          <p className="text-muted-foreground">Key metrics and statistics at a glance. Drag cards to reposition, drag corners to resize.</p>
-        </div>
+      {/* Heading removed per user request */}
+      <div className="flex items-center justify-end">
         <Button variant="outline" size="sm" onClick={resetLayout}>
           <RotateCcw className="w-4 h-4 mr-2" />
           Reset Layout
@@ -1330,60 +1399,26 @@ function OverviewSection({
         </div>
       </ResponsiveGridLayout>
 
-      {/* Custom Reports - Resizable Grid */}
+      {/* Custom Reports Section */}
       {customReports && customReports.length > 0 && (
-        <div className="mt-12">
-          <h3 className="text-lg font-semibold mb-4">Custom Reports</h3>
-          <ResponsiveGridLayout
-            className="layout"
-            layouts={{
-              lg: customReports.map((_, i) => ({
-                i: `custom-report-${i}`,
-                x: (i % 4) * 3,
-                y: Math.floor(i / 4) * 4,
-                w: 3,
-                h: 4,
-                minW: 2,
-                minH: 3,
-              })),
-              md: customReports.map((_, i) => ({
-                i: `custom-report-${i}`,
-                x: (i % 3) * 4,
-                y: Math.floor(i / 3) * 4,
-                w: 4,
-                h: 4,
-                minW: 3,
-                minH: 3,
-              })),
-              sm: customReports.map((_, i) => ({
-                i: `custom-report-${i}`,
-                x: 0,
-                y: i * 4,
-                w: 6,
-                h: 4,
-                minW: 4,
-                minH: 3,
-              })),
-            }}
-            breakpoints={{ lg: 1200, md: 996, sm: 768 }}
-            cols={{ lg: 12, md: 12, sm: 6 }}
-            rowHeight={70}
-            draggableHandle=".drag-handle"
-            isResizable={true}
-            isDraggable={true}
-            margin={[16, 16]}
-            containerPadding={[0, 0]}
-            compactType="vertical"
-          >
-            {customReports.map((report, index) => (
+        <div className="mt-16 w-full">
+          <div className="flex items-center gap-4 mb-6">
+            <div className="h-px flex-1 bg-border"></div>
+            <h3 className="text-lg font-semibold text-muted-foreground">Your Custom Reports</h3>
+            <div className="h-px flex-1 bg-border"></div>
+          </div>
+
+          {/* Simple 2-column grid - guaranteed to work */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 w-full">
+            {customReports.map((report) => (
               <div
-                key={`custom-report-${index}`}
-                className="h-full"
+                key={`report-${report.id}`}
+                className="h-[280px]"
               >
                 <div
                   className="h-full cursor-pointer"
                   onClick={(e) => {
-                    if ((e.target as Element).closest('button, .drag-handle')) return;
+                    if ((e.target as Element).closest('button')) return;
                     onViewReport(report);
                   }}
                 >
@@ -1397,7 +1432,7 @@ function OverviewSection({
                 </div>
               </div>
             ))}
-          </ResponsiveGridLayout>
+          </div>
         </div>
       )}
     </div>

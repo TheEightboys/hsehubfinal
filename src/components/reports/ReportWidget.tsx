@@ -52,10 +52,14 @@ export default function ReportWidget({
     const height = "100%";
 
     if (!hasData) {
+      const metricName = config.metric?.charAt(0).toUpperCase() + config.metric?.slice(1) || 'Data';
       return (
         <div className="flex flex-col items-center justify-center p-6 text-muted-foreground border-2 border-dashed rounded-lg h-full min-h-[200px]">
-          <GripVertical className="w-8 h-8 mb-2 opacity-20" />
-          <p className="text-sm">No data available</p>
+          <GripVertical className="w-10 h-10 mb-3 opacity-20" />
+          <p className="font-medium text-foreground mb-1">No data available</p>
+          <p className="text-xs text-center">
+            Add {metricName.toLowerCase()} to your database<br />to see this report
+          </p>
         </div>
       );
     }
