@@ -131,6 +131,7 @@ export default function Settings() {
   const [auditCategories, setAuditCategories] = useState<any[]>([]);
   const [measureBuildingBlocks, setMeasureBuildingBlocks] = useState<any[]>([]);
   const [employees, setEmployees] = useState<any[]>([]);
+  const [profileFields, setProfileFields] = useState<any[]>([]);
 
   // Approval Process State
   const [approvalWorkflows, setApprovalWorkflows] = useState<any[]>([]);
@@ -278,6 +279,7 @@ export default function Settings() {
       fetchTeamMembers();
       fetchCustomRoles();
       fetchApprovalWorkflows();
+      fetchProfileFields();
       fetchISOStandards();
       fetchGInvestigations();
       fetchAllIsoCriteria();
@@ -420,6 +422,23 @@ export default function Settings() {
       setApprovalWorkflows(formatted);
     } catch (err: unknown) {
       console.error("Error fetching approval workflows:", err);
+    }
+  };
+
+  const fetchProfileFields = async () => {
+    if (!companyId) return;
+
+    try {
+      const { data, error } = await supabase
+        .from("profile_fields")
+        .select("*")
+        .eq("company_id", companyId)
+        .order("display_order", { ascending: true });
+
+      if (error) throw error;
+      setProfileFields(data || []);
+    } catch (err: unknown) {
+      console.error("Error fetching profile fields:", err);
     }
   };
 
@@ -2470,6 +2489,22 @@ export default function Settings() {
                   </button>
 
                   <button
+                    onClick={() => setActiveTab("profile-fields")}
+                    className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${activeTab === "profile-fields"
+                      ? "bg-primary text-primary-foreground"
+                      : "hover:bg-muted text-muted-foreground"
+                      }`}
+                  >
+                    <FileText className="w-4 h-4" />
+                    <div className="text-left">
+                      <div>{t("settings.profileFields")}</div>
+                      <div className="text-xs opacity-80">
+                        {t("settings.profileFieldsDesc")}
+                      </div>
+                    </div>
+                  </button>
+
+                  <button
                     onClick={() => setActiveTab("catalogs")}
                     className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${activeTab === "catalogs"
                       ? "bg-primary text-primary-foreground"
@@ -2480,8 +2515,7 @@ export default function Settings() {
                     <div className="text-left">
                       <div>{t("settings.catalogs")}</div>
                       <div className="text-xs opacity-80">
-                        {t("settings.catalogsDesc")}
-                      </div>
+                        {t("settings.catalogsDesc")}</div>
                     </div>
                   </button>
 
@@ -3395,6 +3429,226 @@ export default function Settings() {
                     </CardContent>
                   </Card>
                 </div>
+              </TabsContent>
+
+              {/* Tab: Profile Fields */}
+              <TabsContent value="profile-fields">
+                <Card>
+                  <CardHeader>
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <CardTitle>{t("settings.profileFieldsTitle")}</CardTitle>
+                        <CardDescription>
+                          {t("settings.profileFieldsSubtitle")}
+                        </CardDescription>
+                      </div>
+                      <Dialog>
+                        <DialogTrigger asChild>
+                          <Button>
+                            <Plus className="w-4 h-4 mr-2" />
+                            {t("settings.addProfileField")}
+                          </Button>
+                        </DialogTrigger>
+                        <DialogContent>
+                          <DialogHeader>
+                            <DialogTitle>{t("settings.addProfileField")}</DialogTitle>
+                            <DialogDescription>
+                              {t("settings.profileFieldsSubtitle")}
+                            </DialogDescription>
+                          </DialogHeader>
+                          <div className="space-y-4 py-4">
+                            <div>
+                              <Label>{t("settings.fieldName")}</Label>
+                              <Input
+                                id="field-name"
+                                placeholder="z.B. education_level"
+                              />
+                            </div>
+                            <div>
+                              <Label>{t("settings.fieldLabel")}</Label>
+                              <Input
+                                id="field-label"
+                                placeholder="z.B. Bildungsstand"
+                              />
+                            </div>
+                            <div>
+                              <Label>{t("settings.fieldType")}</Label>
+                              <Select defaultValue="text">
+                                <SelectTrigger id="field-type">
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="text">{t("settings.fieldTypeText")}</SelectItem>
+                                  <SelectItem value="number">{t("settings.fieldTypeNumber")}</SelectItem>
+                                  <SelectItem value="date">{t("settings.fieldTypeDate")}</SelectItem>
+                                  <SelectItem value="boolean">{t("settings.fieldTypeBoolean")}</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </div>
+                            <div className="flex items-center space-x-2">
+                              <input
+                                type="checkbox"
+                                id="extracted-from-resume"
+                                className="w-4 h-4 cursor-pointer"
+                              />
+                              <Label htmlFor="extracted-from-resume" className="cursor-pointer">
+                                {t("settings.extractedFromResume")}
+                              </Label>
+                            </div>
+                            <div className="flex items-center space-x-2">
+                              <input
+                                type="checkbox"
+                                id="field-required"
+                                className="w-4 h-4 cursor-pointer"
+                              />
+                              <Label htmlFor="field-required" className="cursor-pointer">
+                                {t("settings.fieldRequired")}
+                              </Label>
+                            </div>
+                          </div>
+                          <DialogFooter>
+                            <Button
+                              onClick={async () => {
+                                const fieldName = (document.getElementById("field-name") as HTMLInputElement)?.value;
+                                const fieldLabel = (document.getElementById("field-label") as HTMLInputElement)?.value;
+                                const fieldType = (document.getElementById("field-type") as HTMLInputElement)?.value;
+                                const extractedFromResume = (document.getElementById("extracted-from-resume") as HTMLInputElement)?.checked;
+                                const isRequired = (document.getElementById("field-required") as HTMLInputElement)?.checked;
+
+                                if (!fieldName || !fieldLabel) {
+                                  toast({
+                                    title: "Error",
+                                    description: "Field name and label are required",
+                                    variant: "destructive",
+                                  });
+                                  return;
+                                }
+
+                                try {
+                                  const { error } = await supabase
+                                    .from("profile_fields")
+                                    .insert([
+                                      {
+                                        company_id: companyId,
+                                        field_name: fieldName,
+                                        field_label: fieldLabel,
+                                        field_type: fieldType || "text",
+                                        extracted_from_resume: extractedFromResume,
+                                        is_required: isRequired,
+                                        display_order: profileFields.length,
+                                      },
+                                    ]);
+
+                                  if (error) throw error;
+
+                                  toast({
+                                    title: t("settings.success"),
+                                    description: "Profile field added successfully",
+                                  });
+
+                                  fetchProfileFields();
+                                  (document.getElementById("field-name") as HTMLInputElement).value = "";
+                                  (document.getElementById("field-label") as HTMLInputElement).value = "";
+                                } catch (err: any) {
+                                  toast({
+                                    title: t("settings.error"),
+                                    description: err.message,
+                                    variant: "destructive",
+                                  });
+                                }
+                              }}
+                            >
+                              {t("common.create")}
+                            </Button>
+                          </DialogFooter>
+                        </DialogContent>
+                      </Dialog>
+                    </div>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="rounded-md border">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>{t("settings.fieldLabel")}</TableHead>
+                            <TableHead>{t("settings.fieldName")}</TableHead>
+                            <TableHead>{t("settings.fieldType")}</TableHead>
+                            <TableHead>{t("settings.extractedFromResume")}</TableHead>
+                            <TableHead className="text-right">{t("common.actions")}</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {profileFields.length === 0 ? (
+                            <TableRow>
+                              <TableCell
+                                colSpan={5}
+                                className="text-center py-8 text-muted-foreground"
+                              >
+                                {t("settings.noProfileFields")}
+                              </TableCell>
+                            </TableRow>
+                          ) : (
+                            profileFields.map((field) => (
+                              <TableRow key={field.id}>
+                                <TableCell className="font-medium">
+                                  {field.field_label}
+                                </TableCell>
+                                <TableCell className="font-mono text-sm">
+                                  {field.field_name}
+                                </TableCell>
+                                <TableCell>
+                                  <Badge variant="secondary">
+                                    {field.field_type}
+                                  </Badge>
+                                </TableCell>
+                                <TableCell>
+                                  {field.extracted_from_resume ? "✓" : "-"}
+                                </TableCell>
+                                <TableCell className="text-right">
+                                  <div className="flex justify-end gap-2">
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <Button
+                                          variant="ghost"
+                                          size="icon"
+                                          onClick={async () => {
+                                            try {
+                                              const { error } = await supabase
+                                                .from("profile_fields")
+                                                .delete()
+                                                .eq("id", field.id);
+
+                                              if (error) throw error;
+
+                                              toast({
+                                                title: t("settings.success"),
+                                                description: "Field deleted successfully",
+                                              });
+                                              fetchProfileFields();
+                                            } catch (err: any) {
+                                              toast({
+                                                title: t("settings.error"),
+                                                description: err.message,
+                                                variant: "destructive",
+                                              });
+                                            }
+                                          }}
+                                        >
+                                          <Trash2 className="w-4 h-4 text-destructive" />
+                                        </Button>
+                                      </TooltipTrigger>
+                                      <TooltipContent>Delete</TooltipContent>
+                                    </Tooltip>
+                                  </div>
+                                </TableCell>
+                              </TableRow>
+                            ))
+                          )}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  </CardContent>
+                </Card>
               </TabsContent>
 
               {/* Tab 4: Catalogs & Content */}
