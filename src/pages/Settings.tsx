@@ -175,6 +175,18 @@ export default function Settings() {
   const [isSubmittingTicket, setIsSubmittingTicket] = useState(false);
   const [myTickets, setMyTickets] = useState<any[]>([]);
 
+  // Profile Fields State
+  const [isProfileFieldDialogOpen, setIsProfileFieldDialogOpen] = useState(false);
+  const [editingProfileField, setEditingProfileField] = useState<any>(null);
+  const [profileFieldForm, setProfileFieldForm] = useState({
+    fieldName: "",
+    fieldLabel: "",
+    fieldType: "text",
+    extractedFromResume: false,
+    isRequired: false,
+  });
+  const [isSubmittingProfileField, setIsSubmittingProfileField] = useState(false);
+
   const predefinedISOs = [
     {
       id: "ISO_45001",
@@ -2007,6 +2019,139 @@ export default function Settings() {
     }
   };
 
+  // Profile Fields Management Functions
+  const openProfileFieldDialog = (field?: any) => {
+    if (field) {
+      setEditingProfileField(field);
+      setProfileFieldForm({
+        fieldName: field.field_name,
+        fieldLabel: field.field_label,
+        fieldType: field.field_type,
+        extractedFromResume: field.extracted_from_resume || false,
+        isRequired: field.is_required || false,
+      });
+    } else {
+      setEditingProfileField(null);
+      setProfileFieldForm({
+        fieldName: "",
+        fieldLabel: "",
+        fieldType: "text",
+        extractedFromResume: false,
+        isRequired: false,
+      });
+    }
+    setIsProfileFieldDialogOpen(true);
+  };
+
+  const closeProfileFieldDialog = () => {
+    setIsProfileFieldDialogOpen(false);
+    setEditingProfileField(null);
+    setProfileFieldForm({
+      fieldName: "",
+      fieldLabel: "",
+      fieldType: "text",
+      extractedFromResume: false,
+      isRequired: false,
+    });
+  };
+
+  const saveProfileField = async () => {
+    if (!companyId) return;
+
+    if (!profileFieldForm.fieldName || !profileFieldForm.fieldLabel) {
+      toast({
+        title: t("settings.error"),
+        description: "Field name and label are required",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsSubmittingProfileField(true);
+
+    try {
+      if (editingProfileField) {
+        // Update existing field
+        const { error } = await supabase
+          .from("profile_fields")
+          .update({
+            field_label: profileFieldForm.fieldLabel,
+            field_type: profileFieldForm.fieldType,
+            extracted_from_resume: profileFieldForm.extractedFromResume,
+            is_required: profileFieldForm.isRequired,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", editingProfileField.id);
+
+        if (error) throw error;
+
+        toast({
+          title: t("settings.success"),
+          description: "Profile field updated successfully",
+        });
+      } else {
+        // Create new field
+        const { error } = await supabase
+          .from("profile_fields")
+          .insert([
+            {
+              company_id: companyId,
+              field_name: profileFieldForm.fieldName,
+              field_label: profileFieldForm.fieldLabel,
+              field_type: profileFieldForm.fieldType,
+              extracted_from_resume: profileFieldForm.extractedFromResume,
+              is_required: profileFieldForm.isRequired,
+              display_order: profileFields.length,
+            },
+          ]);
+
+        if (error) throw error;
+
+        toast({
+          title: t("settings.success"),
+          description: "Profile field added successfully",
+        });
+      }
+
+      await fetchProfileFields();
+      closeProfileFieldDialog();
+    } catch (err: any) {
+      toast({
+        title: t("settings.error"),
+        description: err.message,
+        variant: "destructive",
+      });
+    } finally {
+      setIsSubmittingProfileField(false);
+    }
+  };
+
+  const deleteProfileField = async (fieldId: string) => {
+    if (!companyId) return;
+
+    try {
+      const { error } = await supabase
+        .from("profile_fields")
+        .delete()
+        .eq("id", fieldId);
+
+      if (error) throw error;
+
+      toast({
+        title: t("settings.success"),
+        description: "Profile field deleted successfully",
+      });
+
+      await fetchProfileFields();
+    } catch (err: any) {
+      toast({
+        title: t("settings.error"),
+        description: err.message,
+        variant: "destructive",
+      });
+    }
+  };
+
   const renderUserRolesTab = () => (
     <Card>
       <CardHeader>
@@ -3442,127 +3587,10 @@ export default function Settings() {
                           {t("settings.profileFieldsSubtitle")}
                         </CardDescription>
                       </div>
-                      <Dialog>
-                        <DialogTrigger asChild>
-                          <Button>
-                            <Plus className="w-4 h-4 mr-2" />
-                            {t("settings.addProfileField")}
-                          </Button>
-                        </DialogTrigger>
-                        <DialogContent>
-                          <DialogHeader>
-                            <DialogTitle>{t("settings.addProfileField")}</DialogTitle>
-                            <DialogDescription>
-                              {t("settings.profileFieldsSubtitle")}
-                            </DialogDescription>
-                          </DialogHeader>
-                          <div className="space-y-4 py-4">
-                            <div>
-                              <Label>{t("settings.fieldName")}</Label>
-                              <Input
-                                id="field-name"
-                                placeholder="z.B. education_level"
-                              />
-                            </div>
-                            <div>
-                              <Label>{t("settings.fieldLabel")}</Label>
-                              <Input
-                                id="field-label"
-                                placeholder="z.B. Bildungsstand"
-                              />
-                            </div>
-                            <div>
-                              <Label>{t("settings.fieldType")}</Label>
-                              <Select defaultValue="text">
-                                <SelectTrigger id="field-type">
-                                  <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  <SelectItem value="text">{t("settings.fieldTypeText")}</SelectItem>
-                                  <SelectItem value="number">{t("settings.fieldTypeNumber")}</SelectItem>
-                                  <SelectItem value="date">{t("settings.fieldTypeDate")}</SelectItem>
-                                  <SelectItem value="boolean">{t("settings.fieldTypeBoolean")}</SelectItem>
-                                </SelectContent>
-                              </Select>
-                            </div>
-                            <div className="flex items-center space-x-2">
-                              <input
-                                type="checkbox"
-                                id="extracted-from-resume"
-                                className="w-4 h-4 cursor-pointer"
-                              />
-                              <Label htmlFor="extracted-from-resume" className="cursor-pointer">
-                                {t("settings.extractedFromResume")}
-                              </Label>
-                            </div>
-                            <div className="flex items-center space-x-2">
-                              <input
-                                type="checkbox"
-                                id="field-required"
-                                className="w-4 h-4 cursor-pointer"
-                              />
-                              <Label htmlFor="field-required" className="cursor-pointer">
-                                {t("settings.fieldRequired")}
-                              </Label>
-                            </div>
-                          </div>
-                          <DialogFooter>
-                            <Button
-                              onClick={async () => {
-                                const fieldName = (document.getElementById("field-name") as HTMLInputElement)?.value;
-                                const fieldLabel = (document.getElementById("field-label") as HTMLInputElement)?.value;
-                                const fieldType = (document.getElementById("field-type") as HTMLInputElement)?.value;
-                                const extractedFromResume = (document.getElementById("extracted-from-resume") as HTMLInputElement)?.checked;
-                                const isRequired = (document.getElementById("field-required") as HTMLInputElement)?.checked;
-
-                                if (!fieldName || !fieldLabel) {
-                                  toast({
-                                    title: "Error",
-                                    description: "Field name and label are required",
-                                    variant: "destructive",
-                                  });
-                                  return;
-                                }
-
-                                try {
-                                  const { error } = await supabase
-                                    .from("profile_fields")
-                                    .insert([
-                                      {
-                                        company_id: companyId,
-                                        field_name: fieldName,
-                                        field_label: fieldLabel,
-                                        field_type: fieldType || "text",
-                                        extracted_from_resume: extractedFromResume,
-                                        is_required: isRequired,
-                                        display_order: profileFields.length,
-                                      },
-                                    ]);
-
-                                  if (error) throw error;
-
-                                  toast({
-                                    title: t("settings.success"),
-                                    description: "Profile field added successfully",
-                                  });
-
-                                  fetchProfileFields();
-                                  (document.getElementById("field-name") as HTMLInputElement).value = "";
-                                  (document.getElementById("field-label") as HTMLInputElement).value = "";
-                                } catch (err: any) {
-                                  toast({
-                                    title: t("settings.error"),
-                                    description: err.message,
-                                    variant: "destructive",
-                                  });
-                                }
-                              }}
-                            >
-                              {t("common.create")}
-                            </Button>
-                          </DialogFooter>
-                        </DialogContent>
-                      </Dialog>
+                      <Button onClick={() => openProfileFieldDialog()}>
+                        <Plus className="w-4 h-4 mr-2" />
+                        {t("settings.addProfileField")}
+                      </Button>
                     </div>
                   </CardHeader>
                   <CardContent>
@@ -3573,7 +3601,8 @@ export default function Settings() {
                             <TableHead>{t("settings.fieldLabel")}</TableHead>
                             <TableHead>{t("settings.fieldName")}</TableHead>
                             <TableHead>{t("settings.fieldType")}</TableHead>
-                            <TableHead>{t("settings.extractedFromResume")}</TableHead>
+                            <TableHead className="text-center">{t("settings.extractedFromResume")}</TableHead>
+                            <TableHead className="text-center">{t("settings.fieldRequired")}</TableHead>
                             <TableHead className="text-right">{t("common.actions")}</TableHead>
                           </TableRow>
                         </TableHeader>
@@ -3581,7 +3610,7 @@ export default function Settings() {
                           {profileFields.length === 0 ? (
                             <TableRow>
                               <TableCell
-                                colSpan={5}
+                                colSpan={6}
                                 className="text-center py-8 text-muted-foreground"
                               >
                                 {t("settings.noProfileFields")}
@@ -3592,8 +3621,11 @@ export default function Settings() {
                               <TableRow key={field.id}>
                                 <TableCell className="font-medium">
                                   {field.field_label}
+                                  {field.is_required && (
+                                    <span className="text-destructive ml-1">*</span>
+                                  )}
                                 </TableCell>
-                                <TableCell className="font-mono text-sm">
+                                <TableCell className="font-mono text-sm text-muted-foreground">
                                   {field.field_name}
                                 </TableCell>
                                 <TableCell>
@@ -3601,8 +3633,24 @@ export default function Settings() {
                                     {field.field_type}
                                   </Badge>
                                 </TableCell>
-                                <TableCell>
-                                  {field.extracted_from_resume ? "✓" : "-"}
+                                <TableCell className="text-center">
+                                  {field.extracted_from_resume ? (
+                                    <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
+                                      <CheckSquare className="w-3 h-3 mr-1" />
+                                      {t("common.yes")}
+                                    </Badge>
+                                  ) : (
+                                    <span className="text-muted-foreground">-</span>
+                                  )}
+                                </TableCell>
+                                <TableCell className="text-center">
+                                  {field.is_required ? (
+                                    <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
+                                      {t("common.yes")}
+                                    </Badge>
+                                  ) : (
+                                    <span className="text-muted-foreground">-</span>
+                                  )}
                                 </TableCell>
                                 <TableCell className="text-right">
                                   <div className="flex justify-end gap-2">
@@ -3611,28 +3659,19 @@ export default function Settings() {
                                         <Button
                                           variant="ghost"
                                           size="icon"
-                                          onClick={async () => {
-                                            try {
-                                              const { error } = await supabase
-                                                .from("profile_fields")
-                                                .delete()
-                                                .eq("id", field.id);
-
-                                              if (error) throw error;
-
-                                              toast({
-                                                title: t("settings.success"),
-                                                description: "Field deleted successfully",
-                                              });
-                                              fetchProfileFields();
-                                            } catch (err: any) {
-                                              toast({
-                                                title: t("settings.error"),
-                                                description: err.message,
-                                                variant: "destructive",
-                                              });
-                                            }
-                                          }}
+                                          onClick={() => openProfileFieldDialog(field)}
+                                        >
+                                          <Pencil className="w-4 h-4" />
+                                        </Button>
+                                      </TooltipTrigger>
+                                      <TooltipContent>Edit</TooltipContent>
+                                    </Tooltip>
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <Button
+                                          variant="ghost"
+                                          size="icon"
+                                          onClick={() => deleteProfileField(field.id)}
                                         >
                                           <Trash2 className="w-4 h-4 text-destructive" />
                                         </Button>
@@ -3649,6 +3688,143 @@ export default function Settings() {
                     </div>
                   </CardContent>
                 </Card>
+
+                {/* Add/Edit Profile Field Dialog */}
+                <Dialog open={isProfileFieldDialogOpen} onOpenChange={setIsProfileFieldDialogOpen}>
+                  <DialogContent className="sm:max-w-[500px]">
+                    <DialogHeader>
+                      <DialogTitle>
+                        {editingProfileField
+                          ? t("settings.editItem")
+                          : t("settings.addProfileField")}
+                      </DialogTitle>
+                      <DialogDescription>
+                        {t("settings.profileFieldsSubtitle")}
+                      </DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-4 py-4">
+                      <div>
+                        <Label htmlFor="profile-field-name">
+                          {t("settings.fieldName")} <span className="text-destructive">*</span>
+                        </Label>
+                        <Input
+                          id="profile-field-name"
+                          placeholder="z.B. education_level"
+                          value={profileFieldForm.fieldName}
+                          onChange={(e) =>
+                            setProfileFieldForm((prev) => ({
+                              ...prev,
+                              fieldName: e.target.value,
+                            }))
+                          }
+                          disabled={!!editingProfileField}
+                          className={editingProfileField ? "opacity-50" : ""}
+                        />
+                        {editingProfileField && (
+                          <p className="text-xs text-muted-foreground mt-1">
+                            Field name cannot be changed after creation
+                          </p>
+                        )}
+                      </div>
+                      <div>
+                        <Label htmlFor="profile-field-label">
+                          {t("settings.fieldLabel")} <span className="text-destructive">*</span>
+                        </Label>
+                        <Input
+                          id="profile-field-label"
+                          placeholder="z.B. Bildungsstand"
+                          value={profileFieldForm.fieldLabel}
+                          onChange={(e) =>
+                            setProfileFieldForm((prev) => ({
+                              ...prev,
+                              fieldLabel: e.target.value,
+                            }))
+                          }
+                        />
+                      </div>
+                      <div>
+                        <Label htmlFor="profile-field-type">{t("settings.fieldType")}</Label>
+                        <Select
+                          value={profileFieldForm.fieldType}
+                          onValueChange={(value) =>
+                            setProfileFieldForm((prev) => ({
+                              ...prev,
+                              fieldType: value,
+                            }))
+                          }
+                        >
+                          <SelectTrigger id="profile-field-type">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="text">{t("settings.fieldTypeText")}</SelectItem>
+                            <SelectItem value="number">{t("settings.fieldTypeNumber")}</SelectItem>
+                            <SelectItem value="date">{t("settings.fieldTypeDate")}</SelectItem>
+                            <SelectItem value="boolean">{t("settings.fieldTypeBoolean")}</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <input
+                          type="checkbox"
+                          id="profile-extracted-from-resume"
+                          className="w-4 h-4 cursor-pointer"
+                          checked={profileFieldForm.extractedFromResume}
+                          onChange={(e) =>
+                            setProfileFieldForm((prev) => ({
+                              ...prev,
+                              extractedFromResume: e.target.checked,
+                            }))
+                          }
+                        />
+                        <Label htmlFor="profile-extracted-from-resume" className="cursor-pointer font-normal">
+                          {t("settings.extractedFromResume")}
+                        </Label>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <input
+                          type="checkbox"
+                          id="profile-field-required"
+                          className="w-4 h-4 cursor-pointer"
+                          checked={profileFieldForm.isRequired}
+                          onChange={(e) =>
+                            setProfileFieldForm((prev) => ({
+                              ...prev,
+                              isRequired: e.target.checked,
+                            }))
+                          }
+                        />
+                        <Label htmlFor="profile-field-required" className="cursor-pointer font-normal">
+                          {t("settings.fieldRequired")}
+                        </Label>
+                      </div>
+                    </div>
+                    <DialogFooter>
+                      <Button
+                        variant="outline"
+                        onClick={closeProfileFieldDialog}
+                        disabled={isSubmittingProfileField}
+                      >
+                        {t("common.cancel")}
+                      </Button>
+                      <Button
+                        onClick={saveProfileField}
+                        disabled={isSubmittingProfileField}
+                      >
+                        {isSubmittingProfileField ? (
+                          <>
+                            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                            {t("common.saving")}
+                          </>
+                        ) : editingProfileField ? (
+                          t("common.update")
+                        ) : (
+                          t("common.create")
+                        )}
+                      </Button>
+                    </DialogFooter>
+                  </DialogContent>
+                </Dialog>
               </TabsContent>
 
               {/* Tab 4: Catalogs & Content */}

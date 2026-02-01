@@ -619,6 +619,8 @@ const translations = {
     "common.allGroups": "Alle Gruppen",
     "common.fromDate": "Von Datum",
     "common.toDate": "Bis Datum",
+    "common.yes": "Ja",
+    "common.no": "Nein",
 
     // Reports
     "reports.title": "HSE Berichte & Analysen",
@@ -1418,6 +1420,8 @@ const translations = {
     "common.allGroups": "All Groups",
     "common.fromDate": "From Date",
     "common.toDate": "To Date",
+    "common.yes": "Yes",
+    "common.no": "No",
 
     // Reports
     "reports.title": "HSE Reports & Analytics",
@@ -1457,6 +1461,21 @@ const translations = {
     "settings.intervalsDesc": "Risk assessments, audits, notifications",
     "settings.medicalCare": "Occupational Medical Care",
     "settings.medicalDesc": "G-Investigations list",
+    "settings.profileFields": "Profile Fields",
+    "settings.profileFieldsDesc": "Define custom fields",
+    "settings.profileFieldsTitle": "Profile Fields",
+    "settings.profileFieldsSubtitle": "Create templates with fields for candidate profiles. Templates can be assigned as jobs in the editor",
+    "settings.addProfileField": "Add Field",
+    "settings.fieldName": "Field Name",
+    "settings.fieldLabel": "Field Label",
+    "settings.fieldType": "Field Type",
+    "settings.extractedFromResume": "Extracted from Resume",
+    "settings.fieldRequired": "Required Field",
+    "settings.fieldTypeText": "Text",
+    "settings.fieldTypeNumber": "Number",
+    "settings.fieldTypeDate": "Date",
+    "settings.fieldTypeBoolean": "Yes/No",
+    "settings.noProfileFields": "No fields found. Create your first field.",
     "settings.addRole": "Add Custom Role",
     "settings.createRole": "Create Custom Role",
     "settings.roleDesc":
