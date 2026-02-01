@@ -234,6 +234,10 @@ export default function EmployeeProfile() {
   const [showProfileFieldMenu, setShowProfileFieldMenu] = useState(false);
   const [showAllProfileFields, setShowAllProfileFields] = useState(false);
 
+  // Profile field templates from settings
+  const [profileFieldTemplates, setProfileFieldTemplates] = useState<any[]>([]);
+  const [showTemplateDialog, setShowTemplateDialog] = useState(false);
+
   // Debounce timer ref for profile field updates
   const debounceTimerRef = useRef<{ [key: string]: NodeJS.Timeout }>({});
 
@@ -297,6 +301,7 @@ export default function EmployeeProfile() {
       fetchEmployees();
       fetchGInvestigations();
       fetchProfileFields();
+      fetchProfileFieldTemplates();
       fetchTeamMembers();
       fetchUserProfile(); // Fetch logged-in user's profile for note authorship
     }
@@ -697,6 +702,76 @@ export default function EmployeeProfile() {
     } catch (error) {
       console.error("Error fetching profile fields:", error);
       setProfileFields([]);
+    }
+  };
+
+  const fetchProfileFieldTemplates = async () => {
+    if (!companyId) return;
+
+    try {
+      const { data, error } = await supabase
+        .from("profile_fields")
+        .select("*")
+        .eq("company_id", companyId)
+        .order("display_order", { ascending: true });
+
+      if (error) {
+        console.log("No profile field templates found");
+        setProfileFieldTemplates([]);
+        return;
+      }
+
+      setProfileFieldTemplates(data || []);
+    } catch (error) {
+      console.error("Error fetching profile field templates:", error);
+      setProfileFieldTemplates([]);
+    }
+  };
+
+  const applyTemplate = async () => {
+    if (profileFieldTemplates.length === 0) {
+      toast.error("No templates available from Settings");
+      return;
+    }
+
+    try {
+      // Convert all templates to profile fields format
+      const newFields = profileFieldTemplates.map((template) => ({
+        id: `${template.field_name}_${Date.now()}`,
+        label: template.field_label,
+        type: template.field_type === "text" ? "Single-line text" :
+          template.field_type === "number" ? "Number" :
+            template.field_type === "date" ? "Date" :
+              template.field_type === "boolean" ? "Yes/No" : "Single-line text",
+        value: template.field_type === "boolean" ? false : "",
+        is_required: template.is_required,
+        extracted_from_resume: template.extracted_from_resume,
+        created_at: new Date().toISOString(),
+      }));
+
+      const updatedFields = [...profileFields, ...newFields];
+
+      const { error } = await supabase
+        .from("employees")
+        .update({ profile_fields: updatedFields })
+        .eq("id", id);
+
+      if (error) throw error;
+
+      setProfileFields(updatedFields);
+      setShowTemplateDialog(false);
+      toast.success(`Applied ${newFields.length} profile fields from template`);
+
+      await logActivity(
+        "Applied profile field template",
+        "create",
+        `Added ${newFields.length} fields from Settings template`,
+        { fieldsAdded: newFields.length, templates: profileFieldTemplates.map(t => t.field_label) }
+      );
+      await fetchActivityLogs();
+    } catch (error) {
+      console.error("Error applying template:", error);
+      toast.error("Failed to apply template");
     }
   };
 
@@ -2336,82 +2411,97 @@ export default function EmployeeProfile() {
                     <div className="flex items-center justify-between">
                       <CardTitle className="text-lg">Profile Fields</CardTitle>
 
-                      {/* Add profile field button on the right */}
-                      <div className="relative">
+                      {/* Action buttons on the right */}
+                      <div className="flex items-center gap-2">
+                        {/* Use Template Button */}
                         <Button
-                          variant="ghost"
+                          variant="outline"
                           size="sm"
-                          className="text-xs h-8 text-muted-foreground"
-                          onClick={() =>
-                            setShowProfileFieldMenu(!showProfileFieldMenu)
-                          }
+                          className="text-xs h-8"
+                          onClick={() => setShowTemplateDialog(true)}
+                          disabled={profileFieldTemplates.length === 0}
                         >
-                          <Plus className="w-3 h-3 mr-1" />
-                          Add profile field
-                          <ChevronDown className="w-3 h-3 ml-1" />
+                          <FileText className="w-3 h-3 mr-1" />
+                          Use Template
                         </Button>
 
-                        {showProfileFieldMenu && (
-                          <Card className="absolute top-full right-0 mt-1 w-48 z-50 shadow-lg">
-                            <CardContent className="p-2">
-                              <div className="space-y-1">
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  className="w-full justify-start text-xs"
-                                  onClick={() =>
-                                    handleAddProfileField("Single-line text")
-                                  }
-                                >
-                                  <FileText className="w-3 h-3 mr-2" />
-                                  Single-line text
-                                </Button>
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  className="w-full justify-start text-xs"
-                                  onClick={() =>
-                                    handleAddProfileField("Multi-line text")
-                                  }
-                                >
-                                  <List className="w-3 h-3 mr-2" />
-                                  Multi-line text
-                                </Button>
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  className="w-full justify-start text-xs"
-                                  onClick={() =>
-                                    handleAddProfileField("Yes/No")
-                                  }
-                                >
-                                  <CheckCircle className="w-3 h-3 mr-2" />
-                                  Yes / No
-                                </Button>
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  className="w-full justify-start text-xs"
-                                  onClick={() => handleAddProfileField("Date")}
-                                >
-                                  <CalendarIcon className="w-3 h-3 mr-2" />
-                                  Date
-                                </Button>
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  className="w-full justify-start text-xs"
-                                  onClick={() =>
-                                    handleAddProfileField("Number")
-                                  }
-                                >
-                                  <Hash className="w-3 h-3 mr-2" />
-                                  Number
-                                </Button>
-                              </div>
-                            </CardContent>
-                          </Card>
-                        )}
+                        {/* Add profile field button */}
+                        <div className="relative">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="text-xs h-8 text-muted-foreground"
+                            onClick={() =>
+                              setShowProfileFieldMenu(!showProfileFieldMenu)
+                            }
+                          >
+                            <Plus className="w-3 h-3 mr-1" />
+                            Add profile field
+                            <ChevronDown className="w-3 h-3 ml-1" />
+                          </Button>
+
+                          {showProfileFieldMenu && (
+                            <Card className="absolute top-full right-0 mt-1 w-48 z-50 shadow-lg">
+                              <CardContent className="p-2">
+                                <div className="space-y-1">
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="w-full justify-start text-xs"
+                                    onClick={() =>
+                                      handleAddProfileField("Single-line text")
+                                    }
+                                  >
+                                    <FileText className="w-3 h-3 mr-2" />
+                                    Single-line text
+                                  </Button>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="w-full justify-start text-xs"
+                                    onClick={() =>
+                                      handleAddProfileField("Multi-line text")
+                                    }
+                                  >
+                                    <List className="w-3 h-3 mr-2" />
+                                    Multi-line text
+                                  </Button>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="w-full justify-start text-xs"
+                                    onClick={() =>
+                                      handleAddProfileField("Yes/No")
+                                    }
+                                  >
+                                    <CheckCircle className="w-3 h-3 mr-2" />
+                                    Yes / No
+                                  </Button>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="w-full justify-start text-xs"
+                                    onClick={() => handleAddProfileField("Date")}
+                                  >
+                                    <CalendarIcon className="w-3 h-3 mr-2" />
+                                    Date
+                                  </Button>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="w-full justify-start text-xs"
+                                    onClick={() =>
+                                      handleAddProfileField("Number")
+                                    }
+                                  >
+                                    <Hash className="w-3 h-3 mr-2" />
+                                    Number
+                                  </Button>
+                                </div>
+                              </CardContent>
+                            </Card>
+                          )}
+                        </div>
                       </div>
                     </div>
                   </CardHeader>
@@ -2785,6 +2875,72 @@ export default function EmployeeProfile() {
                     </div>
                   </CardContent>
                 </Card>
+
+                {/* Use Template Dialog */}
+                <Dialog open={showTemplateDialog} onOpenChange={setShowTemplateDialog}>
+                  <DialogContent className="sm:max-w-[600px]">
+                    <DialogHeader>
+                      <DialogTitle>Use Profile Field Template</DialogTitle>
+                      <DialogDescription>
+                        Apply profile fields from Settings to this employee. All template fields will be added.
+                      </DialogDescription>
+                    </DialogHeader>
+                    <div className="py-4">
+                      {profileFieldTemplates.length === 0 ? (
+                        <div className="text-center py-8 text-muted-foreground">
+                          <FileText className="w-12 h-12 mx-auto mb-4 opacity-50" />
+                          <p className="font-medium mb-2">No templates available</p>
+                          <p className="text-sm">Go to Settings → Profile Fields to create templates</p>
+                        </div>
+                      ) : (
+                        <div className="space-y-4">
+                          <div className="text-sm text-muted-foreground mb-4">
+                            {profileFieldTemplates.length} field{profileFieldTemplates.length !== 1 ? 's' : ''} from Settings will be applied:
+                          </div>
+                          <div className="max-h-[300px] overflow-y-auto space-y-2 border rounded-lg p-3 bg-muted/20">
+                            {profileFieldTemplates.map((template, index) => (
+                              <div
+                                key={template.id}
+                                className="flex items-center gap-3 p-2 bg-background border rounded text-sm"
+                              >
+                                <div className="w-6 h-6 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xs font-medium">
+                                  {index + 1}
+                                </div>
+                                <div className="flex-1">
+                                  <div className="font-medium">{template.field_label}</div>
+                                  <div className="text-xs text-muted-foreground flex items-center gap-2 mt-1">
+                                    <span className="capitalize">{template.field_type}</span>
+                                    {template.is_required && (
+                                      <span className="text-destructive">• Required</span>
+                                    )}
+                                    {template.extracted_from_resume && (
+                                      <span className="text-green-600">• Resume Extract</span>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                    <DialogFooter>
+                      <Button
+                        variant="outline"
+                        onClick={() => setShowTemplateDialog(false)}
+                      >
+                        Cancel
+                      </Button>
+                      <Button
+                        onClick={applyTemplate}
+                        disabled={profileFieldTemplates.length === 0}
+                      >
+                        <CheckCircle className="w-4 h-4 mr-2" />
+                        Apply Template
+                      </Button>
+                    </DialogFooter>
+                  </DialogContent>
+                </Dialog>
               </div>
 
               {/* Right Column - Tasks & Notes */}
