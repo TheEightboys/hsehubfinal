@@ -273,6 +273,7 @@ export default function Investigations() {
           `
           *,
           employee:employees(
+            id,
             full_name,
             employee_number,
             departments(name),
@@ -745,8 +746,14 @@ export default function Investigations() {
     .filter((item) => item.investigations.length > 0);
 
   // Group health checkups by employee for consistent Employee View (using healthCheckups data)
-  const groupedByEmployeeFromCheckups = employees
-    .map((employee) => {
+  const groupedByEmployeeFromCheckups = Array.from(
+    new Map(
+      healthCheckups
+        .filter((c: any) => c.employee)
+        .map((c: any) => [c.employee_id, { ...c.employee, id: c.employee_id }])
+    ).values()
+  )
+    .map((employee: any) => {
       const employeeCheckups = healthCheckups.filter((checkup: any) => {
         const isForEmployee = checkup.employee_id === employee.id;
         if (!isForEmployee) return false;
@@ -773,7 +780,9 @@ export default function Investigations() {
         checkups: employeeCheckups,
         investigationNames: [
           ...new Set(
-            employeeCheckups.map((c: any) => c.investigation_name).filter(Boolean)
+            employeeCheckups
+              .map((c: any) => c.investigation_name)
+              .filter(Boolean)
           ),
         ].join(", "),
       };
