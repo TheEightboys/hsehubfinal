@@ -2,7 +2,14 @@ import { useEffect, useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, Plus, FileDown, Eye, Trash2, Filter } from "lucide-react";
+import { ArrowLeft, Plus, FileDown, Eye, Trash2, Filter, Calendar as CalendarIcon } from "lucide-react";
+import { format } from "date-fns";
+import { Calendar } from "@/components/ui/calendar";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -200,7 +207,7 @@ export default function Audits() {
           selectedSections = allSelectedCriteria
             .filter((id: string) => id.startsWith(`${isoCode}-section-`))
             .map((id: string) => id.replace(`${isoCode}-section-`, "").trim());
-          
+
           console.log(`Selected sections for ${isoCode}:`, selectedSections);
         }
       }
@@ -426,7 +433,7 @@ export default function Audits() {
                           <span>📅 {audit.scheduled_date}</span>
                           <span>
                             👤{" "}
-                            {audit.team_members 
+                            {audit.team_members
                               ? `${audit.team_members.first_name} ${audit.team_members.last_name}`
                               : t("audits.notAssigned")}
                           </span>
@@ -512,13 +519,31 @@ export default function Audits() {
 
               <div>
                 <Label>{t("audits.scheduledDate")} *</Label>
-                <Input
-                  type="date"
-                  value={formData.scheduled_date}
-                  onChange={(e) =>
-                    setFormData({ ...formData, scheduled_date: e.target.value })
-                  }
-                />
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      className={`w-full justify-start text-left font-normal ${!formData.scheduled_date && "text-muted-foreground"}`}
+                    >
+                      <CalendarIcon className="mr-2 h-4 w-4" />
+                      {formData.scheduled_date ? (
+                        format(new Date(formData.scheduled_date), "PPP")
+                      ) : (
+                        <span>Pick a date</span>
+                      )}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0">
+                    <Calendar
+                      mode="single"
+                      selected={formData.scheduled_date ? new Date(formData.scheduled_date) : undefined}
+                      onSelect={(date) =>
+                        setFormData({ ...formData, scheduled_date: date ? format(date, "yyyy-MM-dd") : "" })
+                      }
+                      initialFocus
+                    />
+                  </PopoverContent>
+                </Popover>
               </div>
             </div>
 

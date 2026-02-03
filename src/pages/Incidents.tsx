@@ -13,7 +13,14 @@ import {
   Trash2,
   Eye,
   Filter,
+  Calendar as CalendarIcon,
 } from "lucide-react";
+import { Calendar } from "@/components/ui/calendar";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -59,11 +66,11 @@ interface Incident {
   title: string;
   description: string | null;
   incident_type:
-    | "injury"
-    | "near_miss"
-    | "property_damage"
-    | "environmental"
-    | "other";
+  | "injury"
+  | "near_miss"
+  | "property_damage"
+  | "environmental"
+  | "other";
   severity: "minor" | "moderate" | "serious" | "critical" | "fatal";
   incident_date: string;
   location: string | null;
@@ -218,8 +225,8 @@ export default function Incidents() {
         description: formData.description || null,
         incident_type: formData.incident_type,
         severity: formData.severity,
-        incident_date: formData.incident_date 
-          ? new Date(formData.incident_date).toISOString() 
+        incident_date: formData.incident_date
+          ? new Date(formData.incident_date).toISOString()
           : new Date().toISOString(),
         location: formData.location || null,
         department_id:
@@ -601,18 +608,34 @@ export default function Incidents() {
                       <Label htmlFor="incident_date">
                         {t("incidents.date")} *
                       </Label>
-                      <Input
-                        id="incident_date"
-                        type="date"
-                        value={formData.incident_date}
-                        onChange={(e) =>
-                          setFormData({
-                            ...formData,
-                            incident_date: e.target.value,
-                          })
-                        }
-                        required
-                      />
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <Button
+                            variant="outline"
+                            className={`w-full justify-start text-left font-normal ${!formData.incident_date && "text-muted-foreground"}`}
+                          >
+                            <CalendarIcon className="mr-2 h-4 w-4" />
+                            {formData.incident_date ? (
+                              format(new Date(formData.incident_date), "PPP")
+                            ) : (
+                              <span>Pick a date</span>
+                            )}
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-auto p-0">
+                          <Calendar
+                            mode="single"
+                            selected={formData.incident_date ? new Date(formData.incident_date) : undefined}
+                            onSelect={(date) =>
+                              setFormData({
+                                ...formData,
+                                incident_date: date ? format(date, "yyyy-MM-dd") : "",
+                              })
+                            }
+                            initialFocus
+                          />
+                        </PopoverContent>
+                      </Popover>
                     </div>
                   </div>
 
@@ -976,6 +999,6 @@ export default function Incidents() {
           </div>
         </CardContent>
       </Card>
-    </div>
+    </div >
   );
 }

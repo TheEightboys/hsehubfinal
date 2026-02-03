@@ -2845,15 +2845,38 @@ export default function EmployeeProfile() {
                                   </span>
                                 </div>
                               ) : field.type === "Date" ? (
-                                <Input
-                                  type="date"
-                                  value={customFieldEditValue || ""}
-                                  onChange={(e) =>
-                                    setCustomFieldEditValue(e.target.value)
-                                  }
-                                  className="text-sm"
-                                  autoFocus
-                                />
+                                <Popover>
+                                  <PopoverTrigger asChild>
+                                    <Button
+                                      variant="outline"
+                                      className={`w-full justify-start text-left font-normal text-sm h-10 ${!customFieldEditValue && "text-muted-foreground"
+                                        }`}
+                                    >
+                                      <CalendarIcon className="mr-2 h-4 w-4" />
+                                      {customFieldEditValue ? (
+                                        format(new Date(customFieldEditValue), "PPP")
+                                      ) : (
+                                        <span>Pick a date</span>
+                                      )}
+                                    </Button>
+                                  </PopoverTrigger>
+                                  <PopoverContent className="w-auto p-0">
+                                    <Calendar
+                                      mode="single"
+                                      selected={
+                                        customFieldEditValue
+                                          ? new Date(customFieldEditValue)
+                                          : undefined
+                                      }
+                                      onSelect={(date) =>
+                                        setCustomFieldEditValue(
+                                          date ? format(date, "yyyy-MM-dd") : ""
+                                        )
+                                      }
+                                      initialFocus
+                                    />
+                                  </PopoverContent>
+                                </Popover>
                               ) : field.type === "Number" ? (
                                 <Input
                                   type="number"
@@ -4157,30 +4180,66 @@ export default function EmployeeProfile() {
                   <div className="grid grid-cols-2 gap-4">
                     <div>
                       <Label>Appointment Date (optional)</Label>
-                      <Input
-                        type="date"
-                        value={checkupFormData.appointment_date}
-                        onChange={(e) =>
-                          setCheckupFormData({
-                            ...checkupFormData,
-                            appointment_date: e.target.value,
-                          })
-                        }
-                      />
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <Button
+                            variant="outline"
+                            className={`w-full justify-start text-left font-normal ${!checkupFormData.appointment_date && "text-muted-foreground"}`}
+                          >
+                            <CalendarIcon className="mr-2 h-4 w-4" />
+                            {checkupFormData.appointment_date ? (
+                              format(new Date(checkupFormData.appointment_date), "PPP")
+                            ) : (
+                              <span>Pick a date</span>
+                            )}
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-auto p-0">
+                          <Calendar
+                            mode="single"
+                            selected={checkupFormData.appointment_date ? new Date(checkupFormData.appointment_date) : undefined}
+                            onSelect={(date) =>
+                              setCheckupFormData({
+                                ...checkupFormData,
+                                appointment_date: date ? format(date, "yyyy-MM-dd") : "",
+                              })
+                            }
+                            initialFocus
+                          />
+                        </PopoverContent>
+                      </Popover>
                     </div>
 
                     <div>
                       <Label>Due Date</Label>
-                      <Input
-                        type="date"
-                        value={checkupFormData.due_date}
-                        onChange={(e) =>
-                          setCheckupFormData({
-                            ...checkupFormData,
-                            due_date: e.target.value,
-                          })
-                        }
-                      />
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <Button
+                            variant="outline"
+                            className={`w-full justify-start text-left font-normal ${!checkupFormData.due_date && "text-muted-foreground"}`}
+                          >
+                            <CalendarIcon className="mr-2 h-4 w-4" />
+                            {checkupFormData.due_date ? (
+                              format(new Date(checkupFormData.due_date), "PPP")
+                            ) : (
+                              <span>Pick a date</span>
+                            )}
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-auto p-0">
+                          <Calendar
+                            mode="single"
+                            selected={checkupFormData.due_date ? new Date(checkupFormData.due_date) : undefined}
+                            onSelect={(date) =>
+                              setCheckupFormData({
+                                ...checkupFormData,
+                                due_date: date ? format(date, "yyyy-MM-dd") : "",
+                              })
+                            }
+                            initialFocus
+                          />
+                        </PopoverContent>
+                      </Popover>
                     </div>
                   </div>
 
@@ -4209,16 +4268,34 @@ export default function EmployeeProfile() {
                   {checkupFormData.status === "done" && (
                     <div>
                       <Label>Completion Date *</Label>
-                      <Input
-                        type="date"
-                        value={checkupFormData.completion_date}
-                        onChange={(e) =>
-                          setCheckupFormData({
-                            ...checkupFormData,
-                            completion_date: e.target.value,
-                          })
-                        }
-                      />
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <Button
+                            variant="outline"
+                            className={`w-full justify-start text-left font-normal ${!checkupFormData.completion_date && "text-muted-foreground"}`}
+                          >
+                            <CalendarIcon className="mr-2 h-4 w-4" />
+                            {checkupFormData.completion_date ? (
+                              format(new Date(checkupFormData.completion_date), "PPP")
+                            ) : (
+                              <span>Pick a date</span>
+                            )}
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-auto p-0">
+                          <Calendar
+                            mode="single"
+                            selected={checkupFormData.completion_date ? new Date(checkupFormData.completion_date) : undefined}
+                            onSelect={(date) =>
+                              setCheckupFormData({
+                                ...checkupFormData,
+                                completion_date: date ? format(date, "yyyy-MM-dd") : "",
+                              })
+                            }
+                            initialFocus
+                          />
+                        </PopoverContent>
+                      </Popover>
                     </div>
                   )}
 

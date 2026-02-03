@@ -17,7 +17,15 @@ import {
   Grid3x3,
   FileDown,
   Trash2,
+  CalendarIcon,
 } from "lucide-react";
+import { format } from "date-fns";
+import { Calendar } from "@/components/ui/calendar";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -766,18 +774,34 @@ export default function RiskAssessments() {
                               <Label htmlFor="assessment_date">
                                 {t("risks.assessmentDate")} *
                               </Label>
-                              <Input
-                                id="assessment_date"
-                                type="date"
-                                value={formData.assessment_date}
-                                onChange={(e) =>
-                                  setFormData({
-                                    ...formData,
-                                    assessment_date: e.target.value,
-                                  })
-                                }
-                                required
-                              />
+                              <Popover>
+                                <PopoverTrigger asChild>
+                                  <Button
+                                    variant="outline"
+                                    className={`w-full justify-start text-left font-normal ${!formData.assessment_date && "text-muted-foreground"}`}
+                                  >
+                                    <CalendarIcon className="mr-2 h-4 w-4" />
+                                    {formData.assessment_date ? (
+                                      format(new Date(formData.assessment_date), "PPP")
+                                    ) : (
+                                      <span>Pick a date</span>
+                                    )}
+                                  </Button>
+                                </PopoverTrigger>
+                                <PopoverContent className="w-auto p-0">
+                                  <Calendar
+                                    mode="single"
+                                    selected={formData.assessment_date ? new Date(formData.assessment_date) : undefined}
+                                    onSelect={(date) =>
+                                      setFormData({
+                                        ...formData,
+                                        assessment_date: date ? format(date, "yyyy-MM-dd") : "",
+                                      })
+                                    }
+                                    initialFocus
+                                  />
+                                </PopoverContent>
+                              </Popover>
                             </div>
                           </div>
 
@@ -1259,17 +1283,34 @@ export default function RiskAssessments() {
                               <Label htmlFor="assessment_date">
                                 {t("risks.dueDate")}
                               </Label>
-                              <Input
-                                id="assessment_date"
-                                type="date"
-                                value={formData.assessment_date}
-                                onChange={(e) =>
-                                  setFormData({
-                                    ...formData,
-                                    assessment_date: e.target.value,
-                                  })
-                                }
-                              />
+                              <Popover>
+                                <PopoverTrigger asChild>
+                                  <Button
+                                    variant="outline"
+                                    className={`w-full justify-start text-left font-normal ${!formData.assessment_date && "text-muted-foreground"}`}
+                                  >
+                                    <CalendarIcon className="mr-2 h-4 w-4" />
+                                    {formData.assessment_date ? (
+                                      format(new Date(formData.assessment_date), "PPP")
+                                    ) : (
+                                      <span>Pick a date</span>
+                                    )}
+                                  </Button>
+                                </PopoverTrigger>
+                                <PopoverContent className="w-auto p-0">
+                                  <Calendar
+                                    mode="single"
+                                    selected={formData.assessment_date ? new Date(formData.assessment_date) : undefined}
+                                    onSelect={(date) =>
+                                      setFormData({
+                                        ...formData,
+                                        assessment_date: date ? format(date, "yyyy-MM-dd") : "",
+                                      })
+                                    }
+                                    initialFocus
+                                  />
+                                </PopoverContent>
+                              </Popover>
                             </div>
                           </div>
 
@@ -1425,16 +1466,33 @@ export default function RiskAssessments() {
 
                                   <div className="space-y-2">
                                     <Label>Due Date</Label>
-                                    <Input
-                                      type="date"
-                                      value={measure.due_date}
-                                      onChange={(e) => {
-                                        const updated = [...measures];
-                                        updated[index].due_date =
-                                          e.target.value;
-                                        setMeasures(updated);
-                                      }}
-                                    />
+                                    <Popover>
+                                      <PopoverTrigger asChild>
+                                        <Button
+                                          variant="outline"
+                                          className={`w-full justify-start text-left font-normal ${!measure.due_date && "text-muted-foreground"}`}
+                                        >
+                                          <CalendarIcon className="mr-2 h-4 w-4" />
+                                          {measure.due_date ? (
+                                            format(new Date(measure.due_date), "PPP")
+                                          ) : (
+                                            <span>Pick a date</span>
+                                          )}
+                                        </Button>
+                                      </PopoverTrigger>
+                                      <PopoverContent className="w-auto p-0">
+                                        <Calendar
+                                          mode="single"
+                                          selected={measure.due_date ? new Date(measure.due_date) : undefined}
+                                          onSelect={(date) => {
+                                            const updated = [...measures];
+                                            updated[index].due_date = date ? format(date, "yyyy-MM-dd") : "";
+                                            setMeasures(updated);
+                                          }}
+                                          initialFocus
+                                        />
+                                      </PopoverContent>
+                                    </Popover>
                                   </div>
 
                                   <div className="space-y-2">

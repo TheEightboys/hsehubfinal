@@ -19,7 +19,13 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Search, Edit, FileDown, Calendar, Users, Trash2 } from "lucide-react";
+import { Plus, Search, Edit, FileDown, Calendar as CalendarIcon, Users, Trash2 } from "lucide-react";
+import { Calendar } from "@/components/ui/calendar";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import { Input } from "@/components/ui/input";
 import {
   Dialog,
@@ -1000,49 +1006,100 @@ export default function Investigations() {
                         <Label htmlFor="start_date">
                           {t("investigations.startDate")}
                         </Label>
-                        <Input
-                          id="start_date"
-                          type="date"
-                          value={formData.start_date}
-                          onChange={(e) =>
-                            setFormData({
-                              ...formData,
-                              start_date: e.target.value,
-                            })
-                          }
-                        />
+                        <Popover>
+                          <PopoverTrigger asChild>
+                            <Button
+                              variant="outline"
+                              className={`w-full justify-start text-left font-normal ${!formData.start_date && "text-muted-foreground"}`}
+                            >
+                              <CalendarIcon className="mr-2 h-4 w-4" />
+                              {formData.start_date ? (
+                                format(new Date(formData.start_date), "PPP")
+                              ) : (
+                                <span>Pick a date</span>
+                              )}
+                            </Button>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-auto p-0">
+                            <Calendar
+                              mode="single"
+                              selected={formData.start_date ? new Date(formData.start_date) : undefined}
+                              onSelect={(date) =>
+                                setFormData({
+                                  ...formData,
+                                  start_date: date ? format(date, "yyyy-MM-dd") : "",
+                                })
+                              }
+                              initialFocus
+                            />
+                          </PopoverContent>
+                        </Popover>
                       </div>
                       <div>
                         <Label htmlFor="due_date">
                           {t("investigations.dueDate")}
                         </Label>
-                        <Input
-                          id="due_date"
-                          type="date"
-                          value={formData.due_date}
-                          onChange={(e) =>
-                            setFormData({
-                              ...formData,
-                              due_date: e.target.value,
-                            })
-                          }
-                        />
+                        <Popover>
+                          <PopoverTrigger asChild>
+                            <Button
+                              variant="outline"
+                              className={`w-full justify-start text-left font-normal ${!formData.due_date && "text-muted-foreground"}`}
+                            >
+                              <CalendarIcon className="mr-2 h-4 w-4" />
+                              {formData.due_date ? (
+                                format(new Date(formData.due_date), "PPP")
+                              ) : (
+                                <span>Pick a date</span>
+                              )}
+                            </Button>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-auto p-0">
+                            <Calendar
+                              mode="single"
+                              selected={formData.due_date ? new Date(formData.due_date) : undefined}
+                              onSelect={(date) =>
+                                setFormData({
+                                  ...formData,
+                                  due_date: date ? format(date, "yyyy-MM-dd") : "",
+                                })
+                              }
+                              initialFocus
+                            />
+                          </PopoverContent>
+                        </Popover>
                       </div>
                       <div>
                         <Label htmlFor="appointment_date">
                           {t("investigations.appointmentDate")} (optional)
                         </Label>
-                        <Input
-                          id="appointment_date"
-                          type="date"
-                          value={formData.appointment_date}
-                          onChange={(e) =>
-                            setFormData({
-                              ...formData,
-                              appointment_date: e.target.value,
-                            })
-                          }
-                        />
+                        <Popover>
+                          <PopoverTrigger asChild>
+                            <Button
+                              variant="outline"
+                              className={`w-full justify-start text-left font-normal ${!formData.appointment_date && "text-muted-foreground"}`}
+                            >
+                              <CalendarIcon className="mr-2 h-4 w-4" />
+                              {formData.appointment_date ? (
+                                format(new Date(formData.appointment_date), "PPP")
+                              ) : (
+                                <span>Pick a date</span>
+                              )}
+                            </Button>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-auto p-0">
+                            <Calendar
+                              mode="single"
+                              selected={formData.appointment_date ? new Date(formData.appointment_date) : undefined}
+                              onSelect={(date) =>
+                                setFormData({
+                                  ...formData,
+                                  appointment_date: date ? format(date, "yyyy-MM-dd") : "",
+                                })
+                              }
+                              initialFocus
+                            />
+                          </PopoverContent>
+                        </Popover>
                       </div>
                     </div>
 
@@ -1144,7 +1201,7 @@ export default function Investigations() {
               onClick={() => setViewMode("date")}
               className="flex-1"
             >
-              <Calendar className="w-4 h-4 mr-2" />
+              <CalendarIcon className="w-4 h-4 mr-2" />
               {t("investigations.dateView")}
             </Button>
             <Button
@@ -1221,19 +1278,53 @@ export default function Investigations() {
               </SelectContent>
             </Select>
 
-            <Input
-              type="date"
-              placeholder={t("common.fromDate")}
-              value={filterDateFrom}
-              onChange={(e) => setFilterDateFrom(e.target.value)}
-            />
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  className={`w-[180px] justify-start text-left font-normal ${!filterDateFrom && "text-muted-foreground"}`}
+                >
+                  <CalendarIcon className="mr-2 h-4 w-4" />
+                  {filterDateFrom ? (
+                    format(new Date(filterDateFrom), "PPP")
+                  ) : (
+                    <span>{t("common.fromDate")}</span>
+                  )}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0">
+                <Calendar
+                  mode="single"
+                  selected={filterDateFrom ? new Date(filterDateFrom) : undefined}
+                  onSelect={(date) => setFilterDateFrom(date ? format(date, "yyyy-MM-dd") : "")}
+                  initialFocus
+                />
+              </PopoverContent>
+            </Popover>
 
-            <Input
-              type="date"
-              placeholder={t("common.toDate")}
-              value={filterDateTo}
-              onChange={(e) => setFilterDateTo(e.target.value)}
-            />
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  className={`w-[180px] justify-start text-left font-normal ${!filterDateTo && "text-muted-foreground"}`}
+                >
+                  <CalendarIcon className="mr-2 h-4 w-4" />
+                  {filterDateTo ? (
+                    format(new Date(filterDateTo), "PPP")
+                  ) : (
+                    <span>{t("common.toDate")}</span>
+                  )}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0">
+                <Calendar
+                  mode="single"
+                  selected={filterDateTo ? new Date(filterDateTo) : undefined}
+                  onSelect={(date) => setFilterDateTo(date ? format(date, "yyyy-MM-dd") : "")}
+                  initialFocus
+                />
+              </PopoverContent>
+            </Popover>
           </div>
         </CardHeader>
 
@@ -1299,7 +1390,7 @@ export default function Investigations() {
                                 <Badge
                                   key={checkup.id}
                                   className={`text-xs ${checkup.status === "done" ? "bg-green-500" :
-                                      checkup.status === "planned" ? "bg-blue-500" : ""
+                                    checkup.status === "planned" ? "bg-blue-500" : ""
                                     }`}
                                   variant={checkup.status === "open" ? "outline" : "default"}
                                 >
@@ -1408,7 +1499,7 @@ export default function Investigations() {
                           <TableCell>
                             <Badge
                               className={`text-xs ${checkup.status === "done" ? "bg-green-500" :
-                                  checkup.status === "planned" ? "bg-blue-500" : ""
+                                checkup.status === "planned" ? "bg-blue-500" : ""
                                 }`}
                               variant={checkup.status === "open" ? "outline" : "default"}
                             >

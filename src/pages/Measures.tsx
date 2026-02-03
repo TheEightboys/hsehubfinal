@@ -12,7 +12,14 @@ import {
   Edit,
   Trash2,
   FileDown,
+  Calendar as CalendarIcon,
 } from "lucide-react";
+import { Calendar } from "@/components/ui/calendar";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -319,7 +326,7 @@ export default function Measures() {
     const tableData = filteredMeasures.map((measure) => [
       measure.title,
       measure.measure_type.charAt(0).toUpperCase() +
-        measure.measure_type.slice(1),
+      measure.measure_type.slice(1),
       measure.status.charAt(0).toUpperCase() + measure.status.slice(1),
       measure.responsible_person?.full_name || "Unassigned",
       measure.due_date
@@ -502,32 +509,66 @@ export default function Measures() {
                     <div className="grid grid-cols-2 gap-4">
                       <div>
                         <Label htmlFor="due_date">Due Date</Label>
-                        <Input
-                          id="due_date"
-                          type="date"
-                          value={formData.due_date}
-                          onChange={(e) =>
-                            setFormData({
-                              ...formData,
-                              due_date: e.target.value,
-                            })
-                          }
-                        />
+                        <Popover>
+                          <PopoverTrigger asChild>
+                            <Button
+                              variant="outline"
+                              className={`w-full justify-start text-left font-normal ${!formData.due_date && "text-muted-foreground"}`}
+                            >
+                              <CalendarIcon className="mr-2 h-4 w-4" />
+                              {formData.due_date ? (
+                                format(new Date(formData.due_date), "PPP")
+                              ) : (
+                                <span>Pick a date</span>
+                              )}
+                            </Button>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-auto p-0">
+                            <Calendar
+                              mode="single"
+                              selected={formData.due_date ? new Date(formData.due_date) : undefined}
+                              onSelect={(date) =>
+                                setFormData({
+                                  ...formData,
+                                  due_date: date ? format(date, "yyyy-MM-dd") : "",
+                                })
+                              }
+                              initialFocus
+                            />
+                          </PopoverContent>
+                        </Popover>
                       </div>
 
                       <div>
                         <Label htmlFor="completion_date">Completion Date</Label>
-                        <Input
-                          id="completion_date"
-                          type="date"
-                          value={formData.completion_date}
-                          onChange={(e) =>
-                            setFormData({
-                              ...formData,
-                              completion_date: e.target.value,
-                            })
-                          }
-                        />
+                        <Popover>
+                          <PopoverTrigger asChild>
+                            <Button
+                              variant="outline"
+                              className={`w-full justify-start text-left font-normal ${!formData.completion_date && "text-muted-foreground"}`}
+                            >
+                              <CalendarIcon className="mr-2 h-4 w-4" />
+                              {formData.completion_date ? (
+                                format(new Date(formData.completion_date), "PPP")
+                              ) : (
+                                <span>Pick a date</span>
+                              )}
+                            </Button>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-auto p-0">
+                            <Calendar
+                              mode="single"
+                              selected={formData.completion_date ? new Date(formData.completion_date) : undefined}
+                              onSelect={(date) =>
+                                setFormData({
+                                  ...formData,
+                                  completion_date: date ? format(date, "yyyy-MM-dd") : "",
+                                })
+                              }
+                              initialFocus
+                            />
+                          </PopoverContent>
+                        </Popover>
                       </div>
                     </div>
 

@@ -66,7 +66,15 @@ import {
   Download,
   Upload,
   FileDown,
+  Calendar as CalendarIcon,
 } from "lucide-react";
+import { format } from "date-fns";
+import { Calendar } from "@/components/ui/calendar";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import { RefreshAuthButton } from "@/components/RefreshAuthButton";
 import { useAuditLog } from "@/hooks/useAuditLog";
 import * as XLSX from "xlsx";
@@ -1310,17 +1318,34 @@ export default function Employees() {
 
                       <div className="space-y-2">
                         <Label>{t("employees.hireDate")}</Label>
-                        <Input
-                          type="date"
-                          className="h-11 border-2 focus:border-primary transition-colors"
-                          value={formData.hire_date}
-                          onChange={(e) =>
-                            setFormData({
-                              ...formData,
-                              hire_date: e.target.value,
-                            })
-                          }
-                        />
+                        <Popover>
+                          <PopoverTrigger asChild>
+                            <Button
+                              variant="outline"
+                              className={`w-full justify-start text-left font-normal border-2 ${!formData.hire_date && "text-muted-foreground"}`}
+                            >
+                              <CalendarIcon className="mr-2 h-4 w-4" />
+                              {formData.hire_date ? (
+                                format(new Date(formData.hire_date), "PPP")
+                              ) : (
+                                <span>Pick a date</span>
+                              )}
+                            </Button>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-auto p-0">
+                            <Calendar
+                              mode="single"
+                              selected={formData.hire_date ? new Date(formData.hire_date) : undefined}
+                              onSelect={(date) =>
+                                setFormData({
+                                  ...formData,
+                                  hire_date: date ? format(date, "yyyy-MM-dd") : "",
+                                })
+                              }
+                              initialFocus
+                            />
+                          </PopoverContent>
+                        </Popover>
                       </div>
 
                       <DialogFooter className="pt-2">
