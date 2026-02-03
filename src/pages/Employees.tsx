@@ -63,9 +63,15 @@ import {
   StickyNote,
   Trash2,
   Save,
+  Download,
+  Upload,
+  FileDown,
 } from "lucide-react";
 import { RefreshAuthButton } from "@/components/RefreshAuthButton";
 import { useAuditLog } from "@/hooks/useAuditLog";
+import * as XLSX from "xlsx";
+import jsPDF from "jspdf";
+import autoTable from "jspdf-autotable";
 
 interface Employee {
   id: string;
@@ -126,6 +132,10 @@ export default function Employees() {
   // Bulk delete states
   const [selectedEmployees, setSelectedEmployees] = useState<Set<string>>(new Set());
   const [isDeleting, setIsDeleting] = useState(false);
+
+  // Import/Export states
+  const [isImporting, setIsImporting] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
 
   useEffect(() => {
     // Debug logging
@@ -667,7 +677,284 @@ export default function Employees() {
 
       toast.error(`${errorMessage}${errorDetails}`);
     } finally {
-      setIsDeleting(false);
+    }
+  };
+
+  // Import handler
+  const handleImport = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    // Validate file type
+    const validTypes = [
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', // .xlsx
+      'application/vnd.ms-excel', // .xls
+      'text/csv',
+    ];
+
+    if (!validTypes.includes(file.type) && !file.name.match(/\.(xlsx|xls|csv)$/i)) {
+      toast.error(t("employees.invalidFile"));
+      event.target.value = ''; // Reset input
+      return;
+    }
+
+    setIsImporting(true);
+    try {
+      const data = await file.arrayBuffer();
+      const workbook = XLSX.read(data);
+      const worksheet = workbook.Sheets[workbook.SheetNames[0]];
+      const jsonData: any[] = XLSX.utils.sheet_to_json(worksheet);
+
+      if (jsonData.length === 0) {
+        toast.error(t("employees.noValidData"));
+        return;
+      }
+
+      // Debug: Log first row to see column names
+      console.log('First row of imported data:', jsonData[0]);
+      console.log('Column names:', Object.keys(jsonData[0]));
+
+      let importedCount = 0;
+      let skippedCount = 0;
+
+      for (const row of jsonData) {
+        // Helper function to get value case-insensitively
+        const getValue = (obj: any, possibleKeys: string[]) => {
+          for (const key of possibleKeys) {
+            // Try exact match first
+            if (obj[key]) return obj[key];
+            // Try case-insensitive match
+            const foundKey = Object.keys(obj).find(k => k.toLowerCase() === key.toLowerCase());
+            if (foundKey && obj[foundKey]) return obj[foundKey];
+          }
+          return null;
+        };
+
+        // Validate required fields with flexible matching
+        const employeeNumber = getValue(row, ['employee_number', 'Employee Number', 'employeeNumber', 'Mitarbeiternummer', 'Employee #', 'Emp #']);
+        const firstName = getValue(row, ['first_name', 'First Name', 'firstName', 'Vorname', 'First']);
+        const lastName = getValue(row, ['last_name', 'Last Name', 'lastName', 'Nachname', 'Last']);
+
+        console.log('Processing row:', { employeeNumber, firstName, lastName });
+
+        if (!employeeNumber || !firstName || !lastName) {
+          console.warn('Skipping row - missing required fields:', row);
+          console.warn('Expected one of these column names:');
+          console.warn('  Employee Number: employee_number, Employee Number, employeeNumber, Mitarbeiternummer');
+          console.warn('  First Name: first_name, First Name, firstName, Vorname');
+          console.warn('  Last Name: last_name, Last Name, lastName, Nachname');
+          console.warn('Actual column names in this row:', Object.keys(row));
+          skippedCount++;
+          continue;
+        }
+
+        // Helper to convert Excel serial date to ISO string (YYYY-MM-DD)
+        const convertExcelDate = (excelDate: any): string | null => {
+          if (!excelDate) return null;
+
+          // If it's already a string in date format, return it
+          if (typeof excelDate === 'string' && excelDate.match(/^\d{4}-\d{2}-\d{2}/)) {
+            return excelDate;
+          }
+
+          // If it's an Excel serial number, convert it
+          if (typeof excelDate === 'number') {
+            // Excel serial date (days since 1900-01-01, accounting for Excel's leap year bug)
+            const excelEpoch = new Date(1899, 11, 30); // December 30, 1899
+            const milliseconds = excelEpoch.getTime() + (excelDate * 24 * 60 * 60 * 1000);
+            const date = new Date(milliseconds);
+            return date.toISOString().split('T')[0]; // YYYY-MM-DD
+          }
+
+          return null;
+        };
+
+        // Get and convert hire_date
+        const hireDateRaw = getValue(row, ['hire_date', 'Hire Date', 'hireDate', 'Einstellungsdatum', 'Start Date']);
+        const hireDate = convertExcelDate(hireDateRaw);
+
+        // Prepare employee data - match actual database schema
+        const employeeData: any = {
+          company_id: companyId,
+          employee_number: String(employeeNumber).trim(),
+          full_name: `${String(firstName).trim()} ${String(lastName).trim()}`,
+          email: getValue(row, ['email', 'Email', 'E-Mail', 'e-mail', 'E-mail']) || null,
+          hire_date: hireDate,
+          is_active: true,
+        };
+
+        // Handle department
+        const departmentName = getValue(row, ['department', 'Department', 'Abteilung', 'Dept']);
+        if (departmentName) {
+          // Try to find existing department
+          const { data: existingDept } = await supabase
+            .from('departments')
+            .select('id')
+            .eq('company_id', companyId)
+            .ilike('name', String(departmentName).trim())
+            .single();
+
+          if (existingDept) {
+            employeeData.department_id = existingDept.id;
+          } else {
+            // Create new department
+            const { data: newDept } = await supabase
+              .from('departments')
+              .insert({ name: String(departmentName).trim(), company_id: companyId })
+              .select('id')
+              .single();
+            if (newDept) {
+              employeeData.department_id = newDept.id;
+            }
+          }
+        }
+
+        // Insert employee
+        const { error } = await supabase
+          .from('employees')
+          .insert(employeeData);
+
+        if (error) {
+          // Check if it's a duplicate employee number
+          if (error.code === '23505' && error.message.includes('employee_number')) {
+            console.warn(`Skipping duplicate employee: ${employeeNumber}`);
+            skippedCount++;
+            continue;
+          }
+
+          console.error(`Error importing employee ${employeeNumber}:`, error);
+          skippedCount++;
+        } else {
+          importedCount++;
+          // Note: Audit logging removed for bulk imports since we don't have the employee ID
+        }
+      }
+
+      // Show helpful message if all rows were skipped
+      if (importedCount === 0 && skippedCount > 0) {
+        toast.error(
+          `${t("employees.importError")}: All ${skippedCount} rows skipped. Check browser console (F12) for details.`
+        );
+        console.error('❌ IMPORT FAILED - All rows skipped');
+        console.error('💡 Common reasons: duplicate employee numbers, missing required fields, or invalid data format');
+        return;
+      }
+
+      const message = importedCount > 0
+        ? `${t("employees.importSuccess")}: ${importedCount} employee${importedCount > 1 ? 's' : ''} imported`
+        : '';
+      const skipMessage = skippedCount > 0
+        ? ` (${skippedCount} skipped - likely duplicates)`
+        : '';
+
+      toast.success(message + skipMessage);
+      fetchEmployees(); // Refresh the list
+    } catch (error) {
+      console.error('Import error:', error);
+      toast.error(t("employees.importError"));
+    } finally {
+      setIsImporting(false);
+      event.target.value = ''; // Reset input
+    }
+  };
+
+  // Export handlers
+  const handleExportXLSX = () => {
+    setIsExporting(true);
+    try {
+      const exportData = filteredEmployees.map(emp => ({
+        'Employee Number': emp.employee_number,
+        'First Name': emp.full_name.split(' ')[0],
+        'Last Name': emp.full_name.split(' ').slice(1).join(' '),
+        'Email': emp.email || '',
+        'Department': emp.departments?.name || '',
+        'Job Role': emp.job_roles?.title || '',
+        'Hire Date': emp.hire_date || '',
+        'Status': emp.is_active ? 'Active' : 'Inactive',
+      }));
+
+      const worksheet = XLSX.utils.json_to_sheet(exportData);
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, 'Employees');
+      XLSX.writeFile(workbook, `employees_${new Date().toISOString().split('T')[0]}.xlsx`);
+
+      toast.success(t("employees.exportSuccess"));
+    } catch (error) {
+      console.error('Export error:', error);
+      toast.error(t("employees.exportError"));
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  const handleExportCSV = () => {
+    setIsExporting(true);
+    try {
+      const exportData = filteredEmployees.map(emp => ({
+        'Employee Number': emp.employee_number,
+        'First Name': emp.full_name.split(' ')[0],
+        'Last Name': emp.full_name.split(' ').slice(1).join(' '),
+        'Email': emp.email || '',
+        'Department': emp.departments?.name || '',
+        'Job Role': emp.job_roles?.title || '',
+        'Hire Date': emp.hire_date || '',
+        'Status': emp.is_active ? 'Active' : 'Inactive',
+      }));
+
+      const worksheet = XLSX.utils.json_to_sheet(exportData);
+      const csv = XLSX.utils.sheet_to_csv(worksheet);
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(blob);
+      link.download = `employees_${new Date().toISOString().split('T')[0]}.csv`;
+      link.click();
+
+      toast.success(t("employees.exportSuccess"));
+    } catch (error) {
+      console.error('Export error:', error);
+      toast.error(t("employees.exportError"));
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  const handleExportPDF = () => {
+    setIsExporting(true);
+    try {
+      const doc = new jsPDF();
+
+      // Add title
+      doc.setFontSize(16);
+      doc.text('Employee List', 14, 15);
+      doc.setFontSize(10);
+      doc.text(`Generated: ${new Date().toLocaleDateString()}`, 14, 22);
+
+      // Prepare table data
+      const tableData = filteredEmployees.map(emp => [
+        emp.employee_number,
+        emp.full_name,
+        emp.email || '-',
+        emp.departments?.name || '-',
+        emp.job_roles?.title || '-',
+        emp.is_active ? 'Active' : 'Inactive',
+      ]);
+
+      // Generate table
+      autoTable(doc, {
+        head: [['Employee #', 'Name', 'Email', 'Department', 'Job Role', 'Status']],
+        body: tableData,
+        startY: 28,
+        styles: { fontSize: 8 },
+        headStyles: { fillColor: [59, 130, 246] },
+      });
+
+      doc.save(`employees_${new Date().toISOString().split('T')[0]}.pdf`);
+      toast.success(t("employees.exportSuccess"));
+    } catch (error) {
+      console.error('Export error:', error);
+      toast.error(t("employees.exportError"));
+    } finally {
+      setIsExporting(false);
     }
   };
 
@@ -1108,6 +1395,70 @@ export default function Employees() {
                     ))}
                   </SelectContent>
                 </Select>
+              </div>
+
+              {/* Import/Export Buttons */}
+              <div className="flex items-end gap-2">
+                {/* Import Button */}
+                <div>
+                  <Label className="text-xs mb-1 block">&nbsp;</Label>
+                  <input
+                    type="file"
+                    id="import-employees"
+                    accept=".xlsx,.xls,.csv"
+                    onChange={handleImport}
+                    className="hidden"
+                    disabled={isImporting}
+                  />
+                  <Button
+                    type="button"
+                    variant="default"
+                    onClick={() => document.getElementById('import-employees')?.click()}
+                    disabled={isImporting}
+                    className="gap-2"
+                  >
+                    <Upload className="w-4 h-4" />
+                    {isImporting ? t("employees.importing") : t("employees.import")}
+                  </Button>
+                </div>
+
+                {/* Export Dropdown */}
+                <div>
+                  <Label className="text-xs mb-1 block">&nbsp;</Label>
+                  <Select
+                    onValueChange={(format) => {
+                      if (format === 'xlsx') handleExportXLSX();
+                      else if (format === 'csv') handleExportCSV();
+                      else if (format === 'pdf') handleExportPDF();
+                    }}
+                    disabled={isExporting}
+                  >
+                    <SelectTrigger className="w-[140px] gap-2">
+                      <Download className="w-4 h-4" />
+                      <SelectValue placeholder={isExporting ? t("employees.exporting") : t("employees.export")} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="xlsx">
+                        <div className="flex items-center gap-2">
+                          <FileDown className="w-4 h-4" />
+                          <span>Excel (.xlsx)</span>
+                        </div>
+                      </SelectItem>
+                      <SelectItem value="csv">
+                        <div className="flex items-center gap-2">
+                          <FileDown className="w-4 h-4" />
+                          <span>CSV (.csv)</span>
+                        </div>
+                      </SelectItem>
+                      <SelectItem value="pdf">
+                        <div className="flex items-center gap-2">
+                          <FileDown className="w-4 h-4" />
+                          <span>PDF (.pdf)</span>
+                        </div>
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
             </div>
 

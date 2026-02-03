@@ -164,6 +164,19 @@ const translations = {
       "Berufsbezeichnung eingeben (z.B. Sicherheitsbeauftragter)",
     "employees.noCompanyId":
       "Keine Firmen-ID gefunden. Sie müssen zuerst einem Unternehmen zugewiesen werden.",
+    "employees.import": "Importieren",
+    "employees.export": "Exportieren",
+    "employees.importEmployees": "Mitarbeiter importieren",
+    "employees.exportAs": "Exportieren als",
+    "employees.selectFile": "Datei auswählen (.xlsx, .xls, .csv)",
+    "employees.importSuccess": "Mitarbeiter erfolgreich importiert",
+    "employees.importError": "Fehler beim Importieren der Mitarbeiter",
+    "employees.exportSuccess": "Mitarbeiter erfolgreich exportiert",
+    "employees.exportError": "Fehler beim Exportieren der Mitarbeiter",
+    "employees.importing": "Wird importiert...",
+    "employees.exporting": "Wird exportiert...",
+    "employees.invalidFile": "Ungültige Datei. Bitte .xlsx, .xls oder .csv verwenden",
+    "employees.noValidData": "Keine gültigen Daten in der Datei gefunden",
 
     // Navigation / Layout
     "nav.dashboard": "Übersicht",
@@ -1008,6 +1021,19 @@ const translations = {
     "employees.enterJobRole": "Enter job role (e.g., Safety Officer)",
     "employees.noCompanyId":
       "No company ID found. You need to be assigned to a company first.",
+    "employees.import": "Import",
+    "employees.export": "Export",
+    "employees.importEmployees": "Import Employees",
+    "employees.exportAs": "Export as",
+    "employees.selectFile": "Select file (.xlsx, .xls, .csv)",
+    "employees.importSuccess": "Employees imported successfully",
+    "employees.importError": "Error importing employees",
+    "employees.exportSuccess": "Employees exported successfully",
+    "employees.exportError": "Error exporting employees",
+    "employees.importing": "Importing...",
+    "employees.exporting": "Exporting...",
+    "employees.invalidFile": "Invalid file. Please use .xlsx, .xls or .csv",
+    "employees.noValidData": "No valid data found in file",
 
     // Navigation / Layout
     "nav.dashboard": "Dashboard",
