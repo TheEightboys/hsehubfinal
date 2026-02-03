@@ -55,6 +55,9 @@ const translations = {
     "dashboard.normal": "Normal",
 
     // Profile
+    "dashboard.investigationsByStatus": "Untersuchungen nach Status",
+    "dashboard.investigationStatusOverview": "Überblick über den Status aller Untersuchungen",
+    "dashboard.upcoming": "Anstehend",
     "profile.title": "Profileinstellungen",
     "profile.subtitle": "Verwalten Sie Ihre Kontoinformationen",
     "profile.saveChanges": "Änderungen speichern",
@@ -917,6 +920,9 @@ const translations = {
     "dashboard.normal": "Normal",
 
     // Profile
+    "dashboard.investigationsByStatus": "Investigations by Status",
+    "dashboard.investigationStatusOverview": "Overview of all investigation status",
+    "dashboard.upcoming": "Upcoming",
     "profile.title": "Profile Settings",
     "profile.subtitle": "Manage your account information",
     "profile.saveChanges": "Save Changes",
