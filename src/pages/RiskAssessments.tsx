@@ -296,10 +296,10 @@ export default function RiskAssessments() {
           .eq("company_id", companyId)
           .order("name"),
         supabase
-          .from("employees")
-          .select("*")
+          .from("team_members")
+          .select("id, first_name, last_name, email, role")
           .eq("company_id", companyId)
-          .order("full_name"),
+          .order("first_name"),
       ]);
 
       if (risksRes.error) throw risksRes.error;
@@ -328,10 +328,10 @@ export default function RiskAssessments() {
       setDepartments(departmentsRes.data || []);
       setExposureGroups(exposureGroupsRes.data || []);
 
-      // Map employees to correct format
+      // Map team members to employee format
       setEmployees((employeesRes.data || []).map((emp: any) => ({
         id: emp.id,
-        full_name: `${emp.full_name} ${emp.email ? `(${emp.email})` : ''}`,
+        full_name: `${emp.first_name} ${emp.last_name} (${emp.role || 'No Role'})`,
       })));
     } catch (err: unknown) {
       const e = err as { message?: string } | Error | null;
