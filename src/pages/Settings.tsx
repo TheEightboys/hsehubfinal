@@ -34,6 +34,9 @@ import {
   Mail,
   Send,
   Headphones,
+  Eye,
+  EyeOff,
+  Copy,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -187,6 +190,20 @@ export default function Settings() {
   });
   const [isSubmittingProfileField, setIsSubmittingProfileField] = useState(false);
 
+  // API Integration State
+  const [apiToken, setApiToken] = useState<string | null>(null);
+  const [showApiToken, setShowApiToken] = useState(false);
+  const [isGeneratingToken, setIsGeneratingToken] = useState(false);
+  const [externalSystems, setExternalSystems] = useState<any[]>([]);
+  const [isAddSystemDialogOpen, setIsAddSystemDialogOpen] = useState(false);
+  const [newSystemForm, setNewSystemForm] = useState({
+    name: "",
+    type: "webhook",
+    endpoint: "",
+  });
+  const [isAddingSystem, setIsAddingSystem] = useState(false);
+
+
   const predefinedISOs = [
     {
       id: "ISO_45001",
@@ -296,6 +313,8 @@ export default function Settings() {
       fetchGInvestigations();
       fetchAllIsoCriteria();
       fetchMyTickets();
+      fetchApiToken();
+      fetchExternalSystems();
     }
   }, [user, loading, navigate, companyId]);
 
@@ -706,6 +725,190 @@ export default function Settings() {
       setMyTickets(data || []);
     } catch (err: any) {
       console.error("Error fetching tickets:", err);
+    }
+  };
+
+  // API Integration Functions
+  const generateApiToken = async () => {
+    if (!companyId) return;
+
+    setIsGeneratingToken(true);
+    try {
+      // Generate a secure random token
+      const newToken = `hse_${crypto.randomUUID().replace(/-/g, '')}`;
+
+      // Store token in company settings (you may want to hash it in production)
+      const { error } = await supabase
+        .from('companies')
+        .update({ api_token: newToken })
+        .eq('id', companyId);
+
+      if (error) throw error;
+
+      setApiToken(newToken);
+      setShowApiToken(true);
+
+      toast({
+        title: t("settings.tokenGenerated") || "Token Generated",
+        description: t("settings.tokenCopied") || "Your new API token has been generated. Copy it now - it won't be shown again!",
+      });
+
+      // Create audit log
+      logAction({
+        action: "generate_api_token",
+        targetType: "api_token",
+        targetId: companyId,
+        targetName: "API Token",
+        details: { action: "regenerated" }
+      });
+    } catch (err: any) {
+      toast({
+        title: "Error",
+        description: err.message || "Failed to generate token",
+        variant: "destructive",
+      });
+    } finally {
+      setIsGeneratingToken(false);
+    }
+  };
+
+  const fetchApiToken = async () => {
+    if (!companyId) return;
+
+    try {
+      const { data, error } = await supabase
+        .from('companies')
+        .select('api_token')
+        .eq('id', companyId)
+        .single();
+
+      if (error) throw error;
+      if (data?.api_token) {
+        setApiToken(data.api_token);
+      }
+    } catch (err: any) {
+      console.error("Error fetching API token:", err);
+    }
+  };
+
+  const fetchExternalSystems = async () => {
+    if (!companyId) return;
+
+    try {
+      const { data, error } = await supabase
+        .from('external_systems')
+        .select('*')
+        .eq('company_id', companyId)
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        // Table might not exist yet
+        console.log("External systems not found or table doesn't exist");
+        return;
+      }
+      setExternalSystems(data || []);
+    } catch (err: any) {
+      console.error("Error fetching external systems:", err);
+    }
+  };
+
+  const addExternalSystem = async () => {
+    if (!companyId || !newSystemForm.name || !newSystemForm.endpoint) {
+      toast({
+        title: "Error",
+        description: "Please fill in all required fields",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsAddingSystem(true);
+    try {
+      const { data, error } = await supabase
+        .from('external_systems')
+        .insert([{
+          company_id: companyId,
+          system_name: newSystemForm.name,
+          system_type: newSystemForm.type,
+          endpoint_url: newSystemForm.endpoint,
+          is_active: true,
+        }])
+        .select();
+
+      if (error) throw error;
+
+      toast({
+        title: "Success",
+        description: "External system added successfully",
+      });
+
+      // Reset form and close dialog
+      setNewSystemForm({ name: "", type: "webhook", endpoint: "" });
+      setIsAddSystemDialogOpen(false);
+      fetchExternalSystems();
+
+      // Create audit log
+      logAction({
+        action: "add_external_system",
+        targetType: "external_system",
+        targetId: (data as any)?.[0]?.id || "unknown",
+        targetName: newSystemForm.name,
+        details: { type: newSystemForm.type }
+      });
+    } catch (err: any) {
+      toast({
+        title: "Error",
+        description: err.message || "Failed to add external system",
+        variant: "destructive",
+      });
+    } finally {
+      setIsAddingSystem(false);
+    }
+  };
+
+  const deleteExternalSystem = async (systemId: string, systemName: string) => {
+    if (!companyId) return;
+
+    try {
+      const { error } = await supabase
+        .from('external_systems')
+        .delete()
+        .eq('id', systemId)
+        .eq('company_id', companyId);
+
+      if (error) throw error;
+
+      toast({
+        title: "Success",
+        description: "External system deleted",
+      });
+
+      fetchExternalSystems();
+
+      // Create audit log
+      logAction({
+        action: "delete_external_system",
+        targetType: "external_system",
+        targetId: systemId,
+        targetName: systemName,
+        details: {}
+      });
+    } catch (err: any) {
+      toast({
+        title: "Error",
+        description: err.message || "Failed to delete system",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const copyApiToken = () => {
+    if (apiToken) {
+      navigator.clipboard.writeText(apiToken);
+      toast({
+        title: t("settings.tokenCopied") || "Copied!",
+        description: "API token copied to clipboard",
+      });
     }
   };
 
@@ -5256,13 +5459,40 @@ export default function Settings() {
                           <div className="flex gap-2 mt-2">
                             <Input
                               id="api-token"
-                              type="password"
-                              value="••••••••••••••••••••••••••••••••"
+                              type={showApiToken ? "text" : "password"}
+                              value={apiToken || "••••••••••••••••••••••••••••••••"}
                               readOnly
                               className="font-mono"
                             />
-                            <Button variant="outline">
-                              <Plus className="w-4 h-4 mr-2" />
+                            {apiToken && (
+                              <>
+                                <Button
+                                  variant="outline"
+                                  size="icon"
+                                  onClick={() => setShowApiToken(!showApiToken)}
+                                >
+                                  {showApiToken ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                                </Button>
+                                <Button
+                                  variant="outline"
+                                  size="icon"
+                                  onClick={copyApiToken}
+                                  title="Copy to clipboard"
+                                >
+                                  <Copy className="w-4 h-4" />
+                                </Button>
+                              </>
+                            )}
+                            <Button
+                              variant="outline"
+                              onClick={generateApiToken}
+                              disabled={isGeneratingToken}
+                            >
+                              {isGeneratingToken ? (
+                                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                              ) : (
+                                <RefreshCw className="w-4 h-4 mr-2" />
+                              )}
                               {t("settings.generateNewToken")}
                             </Button>
                           </div>
@@ -5283,8 +5513,12 @@ export default function Settings() {
                             <p className="text-sm text-muted-foreground">
                               {t("settings.apiDocsDesc")}
                             </p>
-                            <Button variant="link" className="px-0 mt-2">
-                              {t("settings.viewApiDocs")}
+                            <Button
+                              variant="link"
+                              className="px-0 mt-2"
+                              onClick={() => window.open('https://docs.hsehub.com/api', '_blank')}
+                            >
+                              {t("settings.viewApiDocs")} →
                             </Button>
                           </div>
                         </div>
@@ -5308,30 +5542,127 @@ export default function Settings() {
                                 </TableRow>
                               </TableHeader>
                               <TableBody>
-                                <TableRow>
-                                  <TableCell
-                                    colSpan={4}
-                                    className="text-center py-8 text-muted-foreground"
-                                  >
-                                    {t("settings.noSystemsConnected")}
-                                  </TableCell>
-                                </TableRow>
+                                {externalSystems.length === 0 ? (
+                                  <TableRow>
+                                    <TableCell
+                                      colSpan={4}
+                                      className="text-center py-8 text-muted-foreground"
+                                    >
+                                      {t("settings.noSystemsConnected")}
+                                    </TableCell>
+                                  </TableRow>
+                                ) : (
+                                  externalSystems.map((system) => (
+                                    <TableRow key={system.id}>
+                                      <TableCell className="font-medium">
+                                        {system.system_name}
+                                        <span className="text-xs text-muted-foreground ml-2">
+                                          ({system.system_type})
+                                        </span>
+                                      </TableCell>
+                                      <TableCell>
+                                        <Badge variant={system.is_active ? "default" : "secondary"}>
+                                          {system.is_active ? "Active" : "Inactive"}
+                                        </Badge>
+                                      </TableCell>
+                                      <TableCell>
+                                        {system.last_sync_at
+                                          ? new Date(system.last_sync_at).toLocaleString()
+                                          : "Never"
+                                        }
+                                      </TableCell>
+                                      <TableCell className="text-right">
+                                        <Button
+                                          variant="ghost"
+                                          size="sm"
+                                          className="text-destructive"
+                                          onClick={() => deleteExternalSystem(system.id, system.system_name)}
+                                        >
+                                          <Trash2 className="w-4 h-4" />
+                                        </Button>
+                                      </TableCell>
+                                    </TableRow>
+                                  ))
+                                )}
                               </TableBody>
                             </Table>
                           </div>
                         </div>
 
                         <div className="flex justify-end">
-                          <Button>
-                            <Plus className="w-4 h-4 mr-2" />
-                            Add External System
-                          </Button>
+                          <Dialog open={isAddSystemDialogOpen} onOpenChange={setIsAddSystemDialogOpen}>
+                            <DialogTrigger asChild>
+                              <Button>
+                                <Plus className="w-4 h-4 mr-2" />
+                                Add External System
+                              </Button>
+                            </DialogTrigger>
+                            <DialogContent>
+                              <DialogHeader>
+                                <DialogTitle>Add External System</DialogTitle>
+                                <DialogDescription>
+                                  Connect an external system for data synchronization.
+                                </DialogDescription>
+                              </DialogHeader>
+                              <div className="space-y-4 py-4">
+                                <div>
+                                  <Label htmlFor="system-name">System Name *</Label>
+                                  <Input
+                                    id="system-name"
+                                    placeholder="e.g., SAP HR, Salesforce"
+                                    value={newSystemForm.name}
+                                    onChange={(e) => setNewSystemForm(prev => ({ ...prev, name: e.target.value }))}
+                                  />
+                                </div>
+                                <div>
+                                  <Label htmlFor="system-type">System Type</Label>
+                                  <Select
+                                    value={newSystemForm.type}
+                                    onValueChange={(value) => setNewSystemForm(prev => ({ ...prev, type: value }))}
+                                  >
+                                    <SelectTrigger>
+                                      <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      <SelectItem value="webhook">Webhook</SelectItem>
+                                      <SelectItem value="rest_api">REST API</SelectItem>
+                                      <SelectItem value="sftp">SFTP</SelectItem>
+                                      <SelectItem value="database">Database</SelectItem>
+                                    </SelectContent>
+                                  </Select>
+                                </div>
+                                <div>
+                                  <Label htmlFor="system-endpoint">Endpoint URL *</Label>
+                                  <Input
+                                    id="system-endpoint"
+                                    placeholder="https://api.example.com/webhook"
+                                    value={newSystemForm.endpoint}
+                                    onChange={(e) => setNewSystemForm(prev => ({ ...prev, endpoint: e.target.value }))}
+                                  />
+                                </div>
+                              </div>
+                              <DialogFooter>
+                                <Button variant="outline" onClick={() => setIsAddSystemDialogOpen(false)}>
+                                  Cancel
+                                </Button>
+                                <Button onClick={addExternalSystem} disabled={isAddingSystem}>
+                                  {isAddingSystem ? (
+                                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                                  ) : (
+                                    <Plus className="w-4 h-4 mr-2" />
+                                  )}
+                                  Add System
+                                </Button>
+                              </DialogFooter>
+                            </DialogContent>
+                          </Dialog>
                         </div>
                       </div>
                     </div>
                   </CardContent>
                 </Card>
               </TabsContent>
+
 
               {/* Tab 8: Support */}
               <TabsContent value="support">
