@@ -166,7 +166,7 @@ export default function EmployeeProfile() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { companyId, user } = useAuth();
-  const { hasPermission } = usePermissions();
+  const { hasPermission, hasDetailedPermission } = usePermissions();
 
   const [employee, setEmployee] = useState<EmployeeData | null>(null);
   const [editMode, setEditMode] = useState<{ [key: string]: boolean }>({});
@@ -1751,6 +1751,12 @@ export default function EmployeeProfile() {
   };
 
   const handleCreateCheckup = async () => {
+    // Check permission before allowing health examination creation
+    if (!hasDetailedPermission('health_examinations', 'create_edit')) {
+      toast.error("You do not have permission to create health examinations");
+      return;
+    }
+
     // Only G-Investigation is required, appointment date is optional
     if (!checkupFormData.investigation_id) {
       toast.error("Please select a G-Investigation");
@@ -1927,6 +1933,12 @@ export default function EmployeeProfile() {
   };
 
   const handleDeleteCheckup = async (checkupId: string) => {
+    // Check permission before allowing health examination deletion
+    if (!hasDetailedPermission('health_examinations', 'delete')) {
+      toast.error("You do not have permission to delete health examinations");
+      return;
+    }
+
     if (!confirm("Are you sure you want to delete this check-up?")) return;
 
     try {

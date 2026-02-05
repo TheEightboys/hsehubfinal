@@ -86,6 +86,7 @@ import {
 } from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { usePermissions } from "@/hooks/usePermissions";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
@@ -120,6 +121,7 @@ const baseSchema = z.object({
 export default function Settings() {
   const { user, loading, companyId, userRole } = useAuth();
   const { t, language } = useLanguage();
+  const { hasDetailedPermission } = usePermissions();
   const navigate = useNavigate();
   const { toast } = useToast();
   const { logAction } = useAuditLog();
@@ -2269,6 +2271,20 @@ export default function Settings() {
   };
 
   // Enhanced RBAC Handler Functions
+  
+  // Helper function to compute legacy permissions from detailed permissions
+  const computeLegacyPermissions = (detailed: typeof DEFAULT_DETAILED_PERMISSIONS) => {
+    return {
+      dashboard: detailed.standard.collaborate_on_cases || detailed.standard.assign_to_teams,
+      employees: detailed.employees.view_all || detailed.employees.view_own_department || detailed.employees.manage,
+      healthCheckups: detailed.health_examinations.view_all || detailed.health_examinations.view_team || detailed.health_examinations.view_own || detailed.health_examinations.create_edit,
+      documents: detailed.documents.view || detailed.documents.upload || detailed.documents.edit,
+      reports: detailed.reports.view || detailed.reports.create_dashboards || detailed.reports.export_data,
+      audits: detailed.audits.view || detailed.audits.create_edit || detailed.audits.assign_corrective_actions,
+      settings: detailed.settings.company_location || detailed.settings.user_role_management || detailed.settings.gdpr_data_protection || detailed.settings.templates_custom_fields || detailed.settings.subscription_billing,
+    };
+  };
+
   const handleUpdateDetailedPermission = async (
     roleName: string,
     category: PermissionCategory,
@@ -2290,11 +2306,14 @@ export default function Settings() {
       },
     };
 
+    // Compute legacy permissions from detailed permissions
+    const updatedLegacyPermissions = computeLegacyPermissions(updatedDetailedPermissions);
+
     // Optimistically update UI
     setCustomRolesData((prev) =>
       prev.map((r) =>
         r.role_name === roleName
-          ? { ...r, detailed_permissions: updatedDetailedPermissions }
+          ? { ...r, detailed_permissions: updatedDetailedPermissions, permissions: updatedLegacyPermissions }
           : r
       )
     );
@@ -2305,10 +2324,19 @@ export default function Settings() {
       );
     }
 
+    // Also update the legacy roles state
+    setRoles((prev) => ({
+      ...prev,
+      [roleName]: updatedLegacyPermissions,
+    }));
+
     try {
       const { error } = await supabase
         .from("custom_roles")
-        .update({ detailed_permissions: updatedDetailedPermissions })
+        .update({ 
+          detailed_permissions: updatedDetailedPermissions,
+          permissions: updatedLegacyPermissions 
+        })
         .eq("company_id", companyId)
         .eq("role_name", roleName);
 
@@ -2333,6 +2361,16 @@ export default function Settings() {
 
   const handleCreateNewRole = async (name: string, description: string) => {
     if (!companyId) return;
+
+    // Check permission before allowing role creation
+    if (!hasDetailedPermission('settings', 'user_role_management')) {
+      toast({
+        title: "Permission Denied",
+        description: "You do not have permission to manage roles",
+        variant: "destructive",
+      });
+      return;
+    }
 
     const defaultPermissions = {
       dashboard: false,
@@ -2390,6 +2428,15 @@ export default function Settings() {
   };
 
   const handleDeleteRoleEnhanced = async (roleName: string) => {
+    // Check permission before allowing role deletion
+    if (!hasDetailedPermission('settings', 'user_role_management')) {
+      toast({
+        title: "Permission Denied",
+        description: "You do not have permission to manage roles",
+        variant: "destructive",
+      });
+      return;
+    }
     await deleteCustomRole(roleName);
   };
 

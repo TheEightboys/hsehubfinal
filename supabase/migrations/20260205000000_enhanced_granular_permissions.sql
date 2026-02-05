@@ -487,7 +487,53 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 GRANT EXECUTE ON FUNCTION public.check_detailed_permission TO authenticated;
 
 -- ============================================
--- 5. CREATE INDEX FOR PERFORMANCE
+-- 5. CREATE TRIGGER TO SYNC LEGACY PERMISSIONS
+-- ============================================
+
+-- Function to sync legacy permissions from detailed permissions
+CREATE OR REPLACE FUNCTION public.sync_legacy_permissions()
+RETURNS TRIGGER AS $$
+BEGIN
+  -- Compute legacy permissions from detailed_permissions
+  NEW.permissions = jsonb_build_object(
+    'dashboard', COALESCE((NEW.detailed_permissions->'standard'->>'collaborate_on_cases')::boolean, false) OR 
+                 COALESCE((NEW.detailed_permissions->'standard'->>'assign_to_teams')::boolean, false),
+    'employees', COALESCE((NEW.detailed_permissions->'employees'->>'view_all')::boolean, false) OR 
+                 COALESCE((NEW.detailed_permissions->'employees'->>'view_own_department')::boolean, false) OR
+                 COALESCE((NEW.detailed_permissions->'employees'->>'manage')::boolean, false),
+    'healthCheckups', COALESCE((NEW.detailed_permissions->'health_examinations'->>'view_all')::boolean, false) OR 
+                      COALESCE((NEW.detailed_permissions->'health_examinations'->>'view_team')::boolean, false) OR
+                      COALESCE((NEW.detailed_permissions->'health_examinations'->>'view_own')::boolean, false) OR
+                      COALESCE((NEW.detailed_permissions->'health_examinations'->>'create_edit')::boolean, false),
+    'documents', COALESCE((NEW.detailed_permissions->'documents'->>'view')::boolean, false) OR 
+                 COALESCE((NEW.detailed_permissions->'documents'->>'upload')::boolean, false) OR
+                 COALESCE((NEW.detailed_permissions->'documents'->>'edit')::boolean, false),
+    'reports', COALESCE((NEW.detailed_permissions->'reports'->>'view')::boolean, false) OR 
+               COALESCE((NEW.detailed_permissions->'reports'->>'create_dashboards')::boolean, false) OR
+               COALESCE((NEW.detailed_permissions->'reports'->>'export_data')::boolean, false),
+    'audits', COALESCE((NEW.detailed_permissions->'audits'->>'view')::boolean, false) OR 
+              COALESCE((NEW.detailed_permissions->'audits'->>'create_edit')::boolean, false) OR
+              COALESCE((NEW.detailed_permissions->'audits'->>'assign_corrective_actions')::boolean, false),
+    'settings', COALESCE((NEW.detailed_permissions->'settings'->>'company_location')::boolean, false) OR 
+                COALESCE((NEW.detailed_permissions->'settings'->>'user_role_management')::boolean, false) OR
+                COALESCE((NEW.detailed_permissions->'settings'->>'gdpr_data_protection')::boolean, false) OR
+                COALESCE((NEW.detailed_permissions->'settings'->>'templates_custom_fields')::boolean, false) OR
+                COALESCE((NEW.detailed_permissions->'settings'->>'subscription_billing')::boolean, false)
+  );
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Create trigger to auto-sync on insert/update
+DROP TRIGGER IF EXISTS sync_legacy_permissions_trigger ON public.custom_roles;
+CREATE TRIGGER sync_legacy_permissions_trigger
+  BEFORE INSERT OR UPDATE OF detailed_permissions ON public.custom_roles
+  FOR EACH ROW
+  WHEN (NEW.detailed_permissions IS NOT NULL)
+  EXECUTE FUNCTION public.sync_legacy_permissions();
+
+-- ============================================
+-- 6. CREATE INDEX FOR PERFORMANCE
 -- ============================================
 
 CREATE INDEX IF NOT EXISTS idx_custom_roles_detailed_perms 

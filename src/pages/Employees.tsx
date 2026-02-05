@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { usePermissions } from "@/hooks/usePermissions";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 // Removed unused import for Tables
@@ -97,6 +98,7 @@ interface Employee {
 export default function Employees() {
   const { companyId, userRole, loading, user } = useAuth();
   const { t } = useLanguage();
+  const { hasDetailedPermission } = usePermissions();
   const { logAction } = useAuditLog();
   const navigate = useNavigate();
   const [employees, setEmployees] = useState<Employee[]>([]);
@@ -217,6 +219,12 @@ export default function Employees() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    // Check permission before allowing create
+    if (!hasDetailedPermission('employees', 'create')) {
+      toast.error(t("employees.noCreatePermission") || "You do not have permission to create employees");
+      return;
+    }
 
     console.log("Submit - Auth state:", {
       user: user?.email,
@@ -644,6 +652,12 @@ export default function Employees() {
 
   const handleBulkDelete = async () => {
     if (selectedEmployees.size === 0) return;
+
+    // Check permission before allowing delete
+    if (!hasDetailedPermission('employees', 'delete')) {
+      toast.error(t("employees.noDeletePermission") || "You do not have permission to delete employees");
+      return;
+    }
 
     const confirmed = window.confirm(
       `Are you sure you want to delete ${selectedEmployees.size} employee(s)? This action cannot be undone.`
@@ -1125,7 +1139,7 @@ export default function Employees() {
                 </div>
               </div>
               <div className="flex gap-2">
-                {selectedEmployees.size > 0 && (
+                {selectedEmployees.size > 0 && hasDetailedPermission('employees', 'delete') && (
                   <Button
                     variant="destructive"
                     onClick={handleBulkDelete}
@@ -1135,30 +1149,31 @@ export default function Employees() {
                     {isDeleting ? "Deleting..." : `Delete (${selectedEmployees.size})`}
                   </Button>
                 )}
-                <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-                  <DialogTrigger asChild>
-                    <Button>
-                      <Plus className="w-4 h-4 mr-2" />
-                      {t("employees.addEmployee")}
-                    </Button>
-                  </DialogTrigger>
-                  <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-                    <DialogHeader>
-                      <DialogTitle>{t("employees.addNew")}</DialogTitle>
-                      <DialogDescription>
-                        {t("employees.enterDetails")}
-                      </DialogDescription>
-                    </DialogHeader>
-                    <form onSubmit={handleSubmit} className="space-y-4 p-4">
-                      <div className="space-y-2">
-                        <Label htmlFor="employee_number">
-                          {t("employees.employeeNumber")} *
-                        </Label>
-                        <Input
-                          id="employee_number"
-                          className="h-11 border-2 focus:border-primary transition-colors"
-                          value={formData.employee_number}
-                          onChange={(e) =>
+                {hasDetailedPermission('employees', 'create') && (
+                  <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+                    <DialogTrigger asChild>
+                      <Button>
+                        <Plus className="w-4 h-4 mr-2" />
+                        {t("employees.addEmployee")}
+                      </Button>
+                    </DialogTrigger>
+                    <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+                      <DialogHeader>
+                        <DialogTitle>{t("employees.addNew")}</DialogTitle>
+                        <DialogDescription>
+                          {t("employees.enterDetails")}
+                        </DialogDescription>
+                      </DialogHeader>
+                      <form onSubmit={handleSubmit} className="space-y-4 p-4">
+                        <div className="space-y-2">
+                          <Label htmlFor="employee_number">
+                            {t("employees.employeeNumber")} *
+                          </Label>
+                          <Input
+                            id="employee_number"
+                            className="h-11 border-2 focus:border-primary transition-colors"
+                            value={formData.employee_number}
+                            onChange={(e) =>
                             setFormData({
                               ...formData,
                               employee_number: e.target.value,
@@ -1365,6 +1380,7 @@ export default function Employees() {
                     </form>
                   </DialogContent>
                 </Dialog>
+                )}
               </div>
             </div>
           </CardHeader>

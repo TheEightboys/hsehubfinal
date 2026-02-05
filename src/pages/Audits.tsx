@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { usePermissions } from "@/hooks/usePermissions";
 import { useNavigate } from "react-router-dom";
 import { ArrowLeft, Plus, FileDown, Eye, Trash2, Filter, Calendar as CalendarIcon } from "lucide-react";
 import { format } from "date-fns";
@@ -52,6 +53,7 @@ import {
 export default function Audits() {
   const { user, loading, companyId } = useAuth();
   const { t } = useLanguage();
+  const { hasDetailedPermission } = usePermissions();
   const navigate = useNavigate();
   const { toast } = useToast();
 
@@ -136,6 +138,16 @@ export default function Audits() {
 
   const createAudit = async () => {
     if (!companyId) return;
+
+    // Check permission before allowing create
+    if (!hasDetailedPermission('audits', 'create_edit')) {
+      toast({
+        title: "Permission Denied",
+        description: "You do not have permission to create audits",
+        variant: "destructive",
+      });
+      return;
+    }
 
     if (!formData.title || !formData.iso_code || !formData.scheduled_date) {
       toast({
@@ -298,6 +310,16 @@ export default function Audits() {
   const handleDelete = async () => {
     if (!deleteAudit) return;
 
+    // Check permission before allowing delete
+    if (!hasDetailedPermission('audits', 'create_edit')) {
+      toast({
+        title: "Permission Denied",
+        description: "You do not have permission to delete audits",
+        variant: "destructive",
+      });
+      return;
+    }
+
     try {
       const { error } = await supabase
         .from("audits")
@@ -357,10 +379,12 @@ export default function Audits() {
               </p>
             </div>
           </div>
-          <Button onClick={() => setIsDialogOpen(true)}>
-            <Plus className="w-4 h-4 mr-2" />
-            {t("audits.new")}
-          </Button>
+          {hasDetailedPermission('audits', 'create_edit') && (
+            <Button onClick={() => setIsDialogOpen(true)}>
+              <Plus className="w-4 h-4 mr-2" />
+              {t("audits.new")}
+            </Button>
+          )}
         </div>
       </header>
 
@@ -460,13 +484,15 @@ export default function Audits() {
                           <Eye className="w-4 h-4 mr-1" />
                           {t("audits.details")}
                         </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => setDeleteAudit(audit)}
-                        >
-                          <Trash2 className="w-4 h-4 text-destructive" />
-                        </Button>
+                        {hasDetailedPermission('audits', 'create_edit') && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setDeleteAudit(audit)}
+                          >
+                            <Trash2 className="w-4 h-4 text-destructive" />
+                          </Button>
+                        )}
                       </div>
                     </div>
                   </div>

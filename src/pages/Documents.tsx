@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useAuth } from "@/contexts/AuthContext";
+import { usePermissions } from "@/hooks/usePermissions";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -60,6 +61,7 @@ import { formatDistanceToNow, format } from "date-fns";
 
 export default function Documents() {
   const { companyId, user } = useAuth();
+  const { hasDetailedPermission } = usePermissions();
   const { toast } = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -160,6 +162,16 @@ export default function Documents() {
   );
 
   const handleUpload = async () => {
+    // Check permission before allowing upload
+    if (!hasDetailedPermission('documents', 'upload')) {
+      toast({
+        title: "Permission Denied",
+        description: "You do not have permission to upload documents",
+        variant: "destructive",
+      });
+      return;
+    }
+
     if (!uploadFile || !companyId || !user) {
       toast({
         title: "Error",
@@ -285,6 +297,16 @@ export default function Documents() {
   };
 
   const handleDelete = async (doc: Document) => {
+    // Check permission before allowing delete
+    if (!hasDetailedPermission('documents', 'delete')) {
+      toast({
+        title: "Permission Denied",
+        description: "You do not have permission to delete documents",
+        variant: "destructive",
+      });
+      return;
+    }
+
     if (!confirm(`Are you sure you want to delete "${doc.title}"?`)) {
       return;
     }
@@ -394,10 +416,12 @@ export default function Documents() {
           <p className="text-sm text-muted-foreground mb-4">
             or click the button below to select files
           </p>
-          <Button onClick={() => setShowUploadDialog(true)}>
-            <Upload className="h-4 w-4 mr-2" />
-            Upload Document
-          </Button>
+          {hasDetailedPermission('documents', 'upload') && (
+            <Button onClick={() => setShowUploadDialog(true)}>
+              <Upload className="h-4 w-4 mr-2" />
+              Upload Document
+            </Button>
+          )}
         </div>
 
         {/* Search and Filter */}
@@ -445,7 +469,7 @@ export default function Documents() {
                   ? "Try adjusting your search or filters"
                   : "Upload your first document to get started"}
               </p>
-              {!searchQuery && categoryFilter === "all" && (
+              {!searchQuery && categoryFilter === "all" && hasDetailedPermission('documents', 'upload') && (
                 <Button onClick={() => setShowUploadDialog(true)}>
                   <Upload className="h-4 w-4 mr-2" />
                   Upload Document
@@ -526,13 +550,15 @@ export default function Documents() {
                       <Download className="h-4 w-4 mr-1" />
                       Download
                     </Button>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => handleDelete(doc)}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
+                    {hasDetailedPermission('documents', 'delete') && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => handleDelete(doc)}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    )}
                   </div>
                 </CardContent>
               </Card>
