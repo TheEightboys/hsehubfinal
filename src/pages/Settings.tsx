@@ -97,6 +97,13 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
+import { RolePermissionEditor } from "@/components/settings/RolePermissionEditor";
+import {
+  CustomRole,
+  PermissionCategory,
+  DEFAULT_DETAILED_PERMISSIONS,
+  PREDEFINED_ROLES,
+} from "@/types/permissions";
 import {
   Tooltip,
   TooltipContent,
@@ -403,25 +410,50 @@ export default function Settings() {
 
   const fetchCustomRoles = async () => {
     if (!companyId) return;
+    setIsRolesLoading(true);
 
     try {
       const { data, error } = await supabase
         .from("custom_roles")
         .select("*")
-        .eq("company_id", companyId);
+        .eq("company_id", companyId)
+        .order("display_order", { ascending: true });
 
       if (error) throw error;
 
-      // Merge custom roles with predefined ones
+      // Store full custom roles data for enhanced RBAC
       if (data && data.length > 0) {
+        // Map to CustomRole type with defaults for missing fields
+        const mappedRoles: CustomRole[] = data.map((role: any) => ({
+          id: role.id,
+          company_id: role.company_id,
+          role_name: role.role_name,
+          permissions: role.permissions || {},
+          detailed_permissions: role.detailed_permissions || DEFAULT_DETAILED_PERMISSIONS,
+          description: role.description || "",
+          display_order: role.display_order || 100,
+          is_predefined: role.is_predefined || PREDEFINED_ROLES.includes(role.role_name),
+          created_at: role.created_at,
+          updated_at: role.updated_at,
+        }));
+        setCustomRolesData(mappedRoles);
+
+        // Also maintain legacy roles state for backward compatibility
         const customRolesObj: RolePermissions = {};
         data.forEach((role: any) => {
           customRolesObj[role.role_name] = role.permissions;
         });
         setRoles((prev) => ({ ...prev, ...customRolesObj }));
+
+        // Auto-select first role if none selected
+        if (!selectedRoleForEdit && mappedRoles.length > 0) {
+          setSelectedRoleForEdit(mappedRoles[0]);
+        }
       }
     } catch (err: unknown) {
       console.error("Error fetching custom roles:", err);
+    } finally {
+      setIsRolesLoading(false);
     }
   };
 
@@ -2038,6 +2070,11 @@ export default function Settings() {
   const [isAddingCustomRole, setIsAddingCustomRole] = useState(false);
   const [customRoleName, setCustomRoleName] = useState("");
 
+  // Enhanced RBAC State
+  const [customRolesData, setCustomRolesData] = useState<CustomRole[]>([]);
+  const [selectedRoleForEdit, setSelectedRoleForEdit] = useState<CustomRole | null>(null);
+  const [isRolesLoading, setIsRolesLoading] = useState(false);
+
   const permissions = [
     "dashboard",
     "employees",
@@ -2206,16 +2243,186 @@ export default function Settings() {
         return newRoles;
       });
 
+      // Also update customRolesData
+      setCustomRolesData((prev) => prev.filter((r) => r.role_name !== roleName));
+      if (selectedRoleForEdit?.role_name === roleName) {
+        setSelectedRoleForEdit(null);
+      }
+
       toast({
         title: "Success",
         description: `Role "${roleName}" deleted successfully`,
       });
+
+      // Refresh roles
+      fetchCustomRoles();
     } catch (err: unknown) {
       const e = err as { message?: string } | Error | null;
       const message =
         e && "message" in e && e.message ? e.message : String(err);
       toast({
         title: "Error",
+        description: message,
+        variant: "destructive",
+      });
+    }
+  };
+
+  // Enhanced RBAC Handler Functions
+  const handleUpdateDetailedPermission = async (
+    roleName: string,
+    category: PermissionCategory,
+    permission: string,
+    value: boolean
+  ) => {
+    if (!companyId) return;
+
+    // Find the role
+    const role = customRolesData.find((r) => r.role_name === roleName);
+    if (!role) return;
+
+    // Create updated detailed permissions
+    const updatedDetailedPermissions = {
+      ...role.detailed_permissions,
+      [category]: {
+        ...role.detailed_permissions[category],
+        [permission]: value,
+      },
+    };
+
+    // Optimistically update UI
+    setCustomRolesData((prev) =>
+      prev.map((r) =>
+        r.role_name === roleName
+          ? { ...r, detailed_permissions: updatedDetailedPermissions }
+          : r
+      )
+    );
+
+    if (selectedRoleForEdit?.role_name === roleName) {
+      setSelectedRoleForEdit((prev) =>
+        prev ? { ...prev, detailed_permissions: updatedDetailedPermissions } : null
+      );
+    }
+
+    try {
+      const { error } = await supabase
+        .from("custom_roles")
+        .update({ detailed_permissions: updatedDetailedPermissions })
+        .eq("company_id", companyId)
+        .eq("role_name", roleName);
+
+      if (error) throw error;
+
+      toast({
+        title: t("common.success"),
+        description: t("settings.permissionUpdated") || "Permission updated successfully",
+      });
+    } catch (err: unknown) {
+      // Revert on error
+      fetchCustomRoles();
+      const e = err as { message?: string } | Error | null;
+      const message = e && "message" in e && e.message ? e.message : String(err);
+      toast({
+        title: t("common.error"),
+        description: message,
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleCreateNewRole = async (name: string, description: string) => {
+    if (!companyId) return;
+
+    const defaultPermissions = {
+      dashboard: false,
+      employees: false,
+      healthCheckups: false,
+      documents: false,
+      reports: false,
+      audits: false,
+      settings: false,
+    };
+
+    try {
+      const { data, error } = await supabase
+        .from("custom_roles")
+        .insert([
+          {
+            company_id: companyId,
+            role_name: name,
+            permissions: defaultPermissions,
+            detailed_permissions: DEFAULT_DETAILED_PERMISSIONS,
+            description: description,
+            is_predefined: false,
+            display_order: 100,
+          },
+        ])
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      toast({
+        title: t("common.success"),
+        description: `Role "${name}" created successfully`,
+      });
+
+      // Refresh roles
+      fetchCustomRoles();
+
+      // Select the new role
+      if (data) {
+        setSelectedRoleForEdit({
+          ...data,
+          detailed_permissions: data.detailed_permissions || DEFAULT_DETAILED_PERMISSIONS,
+        });
+      }
+    } catch (err: unknown) {
+      const e = err as { message?: string } | Error | null;
+      const message = e && "message" in e && e.message ? e.message : String(err);
+      toast({
+        title: t("common.error"),
+        description: message,
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleDeleteRoleEnhanced = async (roleName: string) => {
+    await deleteCustomRole(roleName);
+  };
+
+  const handleUpdateRoleDescription = async (roleName: string, description: string) => {
+    if (!companyId) return;
+
+    try {
+      const { error } = await supabase
+        .from("custom_roles")
+        .update({ description })
+        .eq("company_id", companyId)
+        .eq("role_name", roleName);
+
+      if (error) throw error;
+
+      // Update local state
+      setCustomRolesData((prev) =>
+        prev.map((r) => (r.role_name === roleName ? { ...r, description } : r))
+      );
+
+      if (selectedRoleForEdit?.role_name === roleName) {
+        setSelectedRoleForEdit((prev) => (prev ? { ...prev, description } : null));
+      }
+
+      toast({
+        title: t("common.success"),
+        description: "Description updated successfully",
+      });
+    } catch (err: unknown) {
+      const e = err as { message?: string } | Error | null;
+      const message = e && "message" in e && e.message ? e.message : String(err);
+      toast({
+        title: t("common.error"),
         description: message,
         variant: "destructive",
       });
@@ -2356,195 +2563,16 @@ export default function Settings() {
   };
 
   const renderUserRolesTab = () => (
-    <Card>
-      <CardHeader>
-        <div className="flex items-center justify-between">
-          <div>
-            <CardTitle>{t("settings.userRoles")}</CardTitle>
-            <CardDescription>{t("settings.rolesDesc")}</CardDescription>
-          </div>
-          <Button onClick={() => setIsAddingCustomRole(true)}>
-            <Plus className="w-4 h-4 mr-2" />
-            {t("settings.addRole")}
-          </Button>
-        </div>
-      </CardHeader>
-      <CardContent>
-        {/* Add Custom Role Dialog */}
-        <Dialog open={isAddingCustomRole} onOpenChange={setIsAddingCustomRole}>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>{t("settings.createRole")}</DialogTitle>
-              <DialogDescription>{t("settings.roleDesc")}</DialogDescription>
-            </DialogHeader>
-            <div className="space-y-4 py-4">
-              <div>
-                <Input
-                  placeholder={t("settings.rolePlaceholder")}
-                  value={customRoleName}
-                  onChange={(e) => setCustomRoleName(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") {
-                      addCustomRole();
-                    }
-                  }}
-                />
-              </div>
-            </div>
-            <DialogFooter>
-              <Button
-                variant="outline"
-                onClick={() => setIsAddingCustomRole(false)}
-              >
-                {t("common.cancel")}
-              </Button>
-              <Button onClick={addCustomRole}>
-                {t("settings.createRole")}
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-
-        {/* Permission Grid */}
-        <div className="rounded-md border overflow-x-auto">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="w-[180px] sticky left-0 bg-background z-10">
-                  {t("settings.role")}
-                </TableHead>
-                <TableHead className="text-center">
-                  {t("settings.dashboard")}
-                </TableHead>
-                <TableHead className="text-center">
-                  {t("settings.employees")}
-                </TableHead>
-                <TableHead className="text-center">
-                  {t("settings.healthCheckups")}
-                </TableHead>
-                <TableHead className="text-center">
-                  {t("settings.documents")}
-                </TableHead>
-                <TableHead className="text-center">
-                  {t("settings.reports")}
-                </TableHead>
-                <TableHead className="text-center">
-                  {t("settings.audits")}
-                </TableHead>
-                <TableHead className="text-center">
-                  {t("settings.settings")}
-                </TableHead>
-                <TableHead className="text-center">
-                  {t("common.actions")}
-                </TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {Object.entries(roles).map(([roleName, permissions]) => {
-                const isPredefined = [
-                  "Admin",
-                  "Line Manager",
-                  "HSE Manager",
-                  "Doctor",
-                  "Employee",
-                  "External",
-                ].includes(roleName);
-
-                return (
-                  <TableRow key={roleName}>
-                    <TableCell className="font-medium sticky left-0 bg-background z-10">
-                      <div className="flex items-center gap-2">
-                        {roleName}
-                        {isPredefined && (
-                          <span className="text-xs text-muted-foreground">
-                            (Predefined)
-                          </span>
-                        )}
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-center">
-                      <input
-                        type="checkbox"
-                        checked={permissions.dashboard}
-                        onChange={() => togglePermission(roleName, "dashboard")}
-                        className="w-4 h-4 cursor-pointer"
-                      />
-                    </TableCell>
-                    <TableCell className="text-center">
-                      <input
-                        type="checkbox"
-                        checked={permissions.employees}
-                        onChange={() => togglePermission(roleName, "employees")}
-                        className="w-4 h-4 cursor-pointer"
-                      />
-                    </TableCell>
-                    <TableCell className="text-center">
-                      <input
-                        type="checkbox"
-                        checked={permissions.healthCheckups}
-                        onChange={() =>
-                          togglePermission(roleName, "healthCheckups")
-                        }
-                        className="w-4 h-4 cursor-pointer"
-                      />
-                    </TableCell>
-                    <TableCell className="text-center">
-                      <input
-                        type="checkbox"
-                        checked={permissions.documents}
-                        onChange={() => togglePermission(roleName, "documents")}
-                        className="w-4 h-4 cursor-pointer"
-                      />
-                    </TableCell>
-                    <TableCell className="text-center">
-                      <input
-                        type="checkbox"
-                        checked={permissions.reports}
-                        onChange={() => togglePermission(roleName, "reports")}
-                        className="w-4 h-4 cursor-pointer"
-                      />
-                    </TableCell>
-                    <TableCell className="text-center">
-                      <input
-                        type="checkbox"
-                        checked={permissions.audits}
-                        onChange={() => togglePermission(roleName, "audits")}
-                        className="w-4 h-4 cursor-pointer"
-                      />
-                    </TableCell>
-                    <TableCell className="text-center">
-                      <input
-                        type="checkbox"
-                        checked={permissions.settings}
-                        onChange={() => togglePermission(roleName, "settings")}
-                        className="w-4 h-4 cursor-pointer"
-                      />
-                    </TableCell>
-                    <TableCell className="text-center">
-                      {!isPredefined && (
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => deleteCustomRole(roleName)}
-                              className="h-7 w-7"
-                            >
-                              <Trash2 className="w-3 h-3 text-destructive" />
-                            </Button>
-                          </TooltipTrigger>
-                          <TooltipContent>Delete role</TooltipContent>
-                        </Tooltip>
-                      )}
-                    </TableCell>
-                  </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
-        </div>
-      </CardContent>
-    </Card>
+    <RolePermissionEditor
+      roles={customRolesData}
+      selectedRole={selectedRoleForEdit}
+      onSelectRole={setSelectedRoleForEdit}
+      onUpdatePermission={handleUpdateDetailedPermission}
+      onCreateRole={handleCreateNewRole}
+      onDeleteRole={handleDeleteRoleEnhanced}
+      onUpdateRoleDescription={handleUpdateRoleDescription}
+      isLoading={isRolesLoading}
+    />
   );
 
   const renderTable = (data: any[], title: string) => (

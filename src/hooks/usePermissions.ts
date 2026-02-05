@@ -1,6 +1,12 @@
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import { 
+  DetailedPermissions, 
+  PermissionCategory,
+  DEFAULT_DETAILED_PERMISSIONS,
+  ADMIN_DETAILED_PERMISSIONS 
+} from "@/types/permissions";
 
 // Enable verbose logging in development
 const DEBUG_RBAC = import.meta.env.DEV;
@@ -11,6 +17,7 @@ function logRBAC(message: string, data?: unknown) {
   }
 }
 
+// Legacy permissions interface (for backward compatibility)
 export interface Permissions {
   dashboard: boolean;
   employees: boolean;
@@ -83,6 +90,7 @@ export const ROUTE_PERMISSION_MAP: Record<string, keyof Permissions> = {
 export function usePermissions() {
   const { user, userRole, companyId, loading: authLoading } = useAuth();
   const [permissions, setPermissions] = useState<Permissions>(DEFAULT_PERMISSIONS);
+  const [detailedPermissions, setDetailedPermissions] = useState<DetailedPermissions>(DEFAULT_DETAILED_PERMISSIONS);
   const [loading, setLoading] = useState(true);
   const [roleName, setRoleName] = useState<string | null>(null);
 
@@ -95,6 +103,7 @@ export function usePermissions() {
     if (!user || !companyId) {
       logRBAC("⚠️ No user or companyId - denying all permissions");
       setPermissions(DEFAULT_PERMISSIONS);
+      setDetailedPermissions(DEFAULT_DETAILED_PERMISSIONS);
       setLoading(false);
       return;
     }
@@ -103,6 +112,7 @@ export function usePermissions() {
     if (userRole === "super_admin") {
       logRBAC("✅ Super Admin detected - granting all permissions");
       setPermissions(SUPER_ADMIN_PERMISSIONS);
+      setDetailedPermissions(ADMIN_DETAILED_PERMISSIONS);
       setRoleName("Super Admin");
       setLoading(false);
       return;
@@ -112,6 +122,7 @@ export function usePermissions() {
     if (userRole === "company_admin") {
       logRBAC("✅ Company Admin detected - granting all permissions");
       setPermissions(ADMIN_PERMISSIONS);
+      setDetailedPermissions(ADMIN_DETAILED_PERMISSIONS);
       setRoleName("Admin");
       setLoading(false);
       return;
@@ -139,7 +150,7 @@ export function usePermissions() {
       logRBAC("Fetching permissions from custom_roles table for role:", assignedRole);
       const { data: roleData, error: roleError } = await supabase
         .from("custom_roles")
-        .select("permissions")
+        .select("permissions, detailed_permissions")
         .eq("company_id", companyId)
         .eq("role_name", assignedRole)
         .maybeSingle();
@@ -173,16 +184,28 @@ export function usePermissions() {
 
         logRBAC("✅ Final mapped permissions:", mappedPermissions);
         setPermissions(mappedPermissions);
+
+        // Handle detailed permissions if available
+        if (roleData.detailed_permissions) {
+          const detailed = roleData.detailed_permissions as DetailedPermissions;
+          logRBAC("✅ Detailed permissions found:", detailed);
+          setDetailedPermissions(detailed);
+        } else {
+          logRBAC("⚠️ No detailed_permissions, using defaults");
+          setDetailedPermissions(DEFAULT_DETAILED_PERMISSIONS);
+        }
       } else {
         // NO FALLBACK TO PERMISSIVE DEFAULTS - deny all if no role config found
         logRBAC("⚠️ No custom_roles entry found for role:", assignedRole);
         logRBAC("⚠️ DENYING ALL - no permissions configured for this role");
         setPermissions(DEFAULT_PERMISSIONS);
+        setDetailedPermissions(DEFAULT_DETAILED_PERMISSIONS);
       }
     } catch (error) {
       logRBAC("❌ Exception in fetchPermissions:", error);
       // On error, deny all
       setPermissions(DEFAULT_PERMISSIONS);
+      setDetailedPermissions(DEFAULT_DETAILED_PERMISSIONS);
     } finally {
       setLoading(false);
       logRBAC("=== Permission Resolution Complete ===");
@@ -208,6 +231,27 @@ export function usePermissions() {
       return result;
     },
     [permissions, userRole]
+  );
+
+  // Check if user has a specific detailed permission
+  const hasDetailedPermission = useCallback(
+    (category: PermissionCategory, permission: string): boolean => {
+      // Super admin and company admin always have access
+      if (userRole === "super_admin" || userRole === "company_admin") {
+        return true;
+      }
+      
+      const categoryPerms = detailedPermissions[category];
+      if (!categoryPerms) {
+        logRBAC(`hasDetailedPermission: category "${category}" not found`);
+        return false;
+      }
+      
+      const result = (categoryPerms as unknown as Record<string, boolean>)[permission] === true;
+      logRBAC(`hasDetailedPermission("${category}.${permission}") = ${result}`);
+      return result;
+    },
+    [detailedPermissions, userRole]
   );
 
   // Check if user can access a specific route
@@ -237,9 +281,11 @@ export function usePermissions() {
 
   return {
     permissions,
+    detailedPermissions,
     loading: loading || authLoading,
     roleName,
     hasPermission,
+    hasDetailedPermission,
     canAccessRoute,
     refreshPermissions: fetchPermissions,
   };

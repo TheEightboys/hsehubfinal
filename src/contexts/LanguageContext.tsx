@@ -668,6 +668,7 @@ const translations = {
     "settings.userRoles": "Benutzerrollen & Berechtigungen (RBAC)",
     "settings.rolesDesc":
       "Rollen definieren und Zugriffsberechtigungen im System festlegen",
+    "settings.permissionUpdated": "Berechtigung erfolgreich aktualisiert",
     "settings.configuration": "Konfiguration",
     "settings.configDesc": "Standorte, Abteilungen, Genehmigungen",
     "settings.catalogs": "Kataloge & Inhalte",
@@ -1485,6 +1486,7 @@ const translations = {
     "settings.userRoles": "User Roles & Permissions (RBAC)",
     "settings.rolesDesc":
       "Define roles and their access permissions across the system",
+    "settings.permissionUpdated": "Permission updated successfully",
     "settings.configuration": "Configuration",
     "settings.configDesc": "Locations, departments, approvals",
     "settings.catalogs": "Catalogs & Content",
