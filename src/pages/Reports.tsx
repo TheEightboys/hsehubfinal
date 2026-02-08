@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback, useMemo, startTransition } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { usePermissions } from "@/hooks/usePermissions";
 import { useNavigate } from "react-router-dom";
 import {
   Download,
@@ -57,6 +58,7 @@ import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { useAuditLog } from "@/hooks/useAuditLog";
 import {
   LineChart,
   Line,
@@ -116,8 +118,10 @@ interface NavSection {
 export default function Reports() {
   const { user, companyId, loading } = useAuth();
   const { t } = useLanguage();
+  const { hasDetailedPermission } = usePermissions();
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { logAction } = useAuditLog();
 
   const [activeSection, setActiveSection] = useState("overview");
   const [reportName, setReportName] = useState("Monthly Safety Report");
@@ -278,6 +282,15 @@ export default function Reports() {
     try {
       localStorage.setItem('hse_custom_reports', JSON.stringify(reports));
       setCustomReports(reports);
+
+      // Log action
+      logAction({
+        action: "update_custom_reports",
+        targetType: "reports",
+        targetId: "custom_reports",
+        targetName: "Custom Reports Configuration",
+        details: { count: reports.length }
+      });
     } catch (error) {
       console.error('Error saving custom reports:', error);
     }
@@ -454,6 +467,16 @@ export default function Reports() {
   };
 
   const exportReport = () => {
+    // Check permission before allowing export
+    if (!hasDetailedPermission('reports', 'export_data')) {
+      toast({
+        title: "Permission Denied",
+        description: "You do not have permission to export data",
+        variant: "destructive",
+      });
+      return;
+    }
+    
     toast({
       title: "Coming Soon",
       description: "PDF export functionality will be available soon",
@@ -932,6 +955,16 @@ export default function Reports() {
   };
 
   const handleExportReport = (config: ReportConfig) => {
+    // Check permission before allowing export
+    if (!hasDetailedPermission('reports', 'export_data')) {
+      toast({
+        title: "Permission Denied",
+        description: "You do not have permission to export data",
+        variant: "destructive",
+      });
+      return;
+    }
+    
     toast({
       title: "Exporting Report",
       description: `Exporting "${config.title}"...`,
@@ -1023,15 +1056,19 @@ export default function Reports() {
                 </SelectContent>
               </Select>
 
-              <Button className="bg-purple-600 hover:bg-purple-700" size="sm" onClick={handleAddReport}>
-                <Plus className="w-4 h-4 mr-2" />
-                Add report
-              </Button>
+              {hasDetailedPermission('reports', 'create_dashboards') && (
+                <Button className="bg-purple-600 hover:bg-purple-700" size="sm" onClick={handleAddReport}>
+                  <Plus className="w-4 h-4 mr-2" />
+                  Add report
+                </Button>
+              )}
 
-              <Button variant="outline" size="sm" onClick={exportReport}>
-                <Download className="w-4 h-4 mr-2" />
-                Export PDF
-              </Button>
+              {hasDetailedPermission('reports', 'export_data') && (
+                <Button variant="outline" size="sm" onClick={exportReport}>
+                  <Download className="w-4 h-4 mr-2" />
+                  Export PDF
+                </Button>
+              )}
             </div>
           </div>
         </header>

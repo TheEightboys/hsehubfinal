@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useAuth } from "@/contexts/AuthContext";
+import { usePermissions } from "@/hooks/usePermissions";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -39,10 +40,16 @@ import {
   AlertCircle,
   FileIcon,
   Eye,
-  Calendar,
+  Calendar as CalendarIcon,
   User,
   Loader2,
 } from "lucide-react";
+import { Calendar } from "@/components/ui/calendar";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import {
   Document,
   DocumentInsert,
@@ -50,10 +57,11 @@ import {
   documentCategoryLabels,
   DocumentWithUploader,
 } from "@/types/hse-tables";
-import { formatDistanceToNow } from "date-fns";
+import { formatDistanceToNow, format } from "date-fns";
 
 export default function Documents() {
   const { companyId, user } = useAuth();
+  const { hasDetailedPermission } = usePermissions();
   const { toast } = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -154,6 +162,16 @@ export default function Documents() {
   );
 
   const handleUpload = async () => {
+    // Check permission before allowing upload
+    if (!hasDetailedPermission('documents', 'upload')) {
+      toast({
+        title: "Permission Denied",
+        description: "You do not have permission to upload documents",
+        variant: "destructive",
+      });
+      return;
+    }
+
     if (!uploadFile || !companyId || !user) {
       toast({
         title: "Error",
@@ -279,6 +297,16 @@ export default function Documents() {
   };
 
   const handleDelete = async (doc: Document) => {
+    // Check permission before allowing delete
+    if (!hasDetailedPermission('documents', 'delete')) {
+      toast({
+        title: "Permission Denied",
+        description: "You do not have permission to delete documents",
+        variant: "destructive",
+      });
+      return;
+    }
+
     if (!confirm(`Are you sure you want to delete "${doc.title}"?`)) {
       return;
     }
@@ -378,21 +406,22 @@ export default function Documents() {
           onDragOver={handleDragOver}
           onDragLeave={handleDragLeave}
           onDrop={handleDrop}
-          className={`mb-6 border-2 border-dashed rounded-lg p-8 text-center transition-colors ${
-            isDragging
+          className={`mb-6 border-2 border-dashed rounded-lg p-8 text-center transition-colors ${isDragging
               ? "border-primary bg-primary/5"
               : "border-border hover:border-primary/50"
-          }`}
+            }`}
         >
           <Upload className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
           <p className="text-lg font-medium mb-2">Drag and drop files here</p>
           <p className="text-sm text-muted-foreground mb-4">
             or click the button below to select files
           </p>
-          <Button onClick={() => setShowUploadDialog(true)}>
-            <Upload className="h-4 w-4 mr-2" />
-            Upload Document
-          </Button>
+          {hasDetailedPermission('documents', 'upload') && (
+            <Button onClick={() => setShowUploadDialog(true)}>
+              <Upload className="h-4 w-4 mr-2" />
+              Upload Document
+            </Button>
+          )}
         </div>
 
         {/* Search and Filter */}
@@ -440,7 +469,7 @@ export default function Documents() {
                   ? "Try adjusting your search or filters"
                   : "Upload your first document to get started"}
               </p>
-              {!searchQuery && categoryFilter === "all" && (
+              {!searchQuery && categoryFilter === "all" && hasDetailedPermission('documents', 'upload') && (
                 <Button onClick={() => setShowUploadDialog(true)}>
                   <Upload className="h-4 w-4 mr-2" />
                   Upload Document
@@ -483,7 +512,7 @@ export default function Documents() {
                       </span>
                     </div>
                     <div className="flex items-center gap-2">
-                      <Calendar className="h-4 w-4" />
+                      <CalendarIcon className="h-4 w-4" />
                       <span>
                         {formatDistanceToNow(new Date(doc.created_at), {
                           addSuffix: true,
@@ -495,13 +524,12 @@ export default function Documents() {
                     </div>
                     {doc.expiry_date && (
                       <div
-                        className={`flex items-center gap-2 ${
-                          isExpired(doc.expiry_date)
+                        className={`flex items-center gap-2 ${isExpired(doc.expiry_date)
                             ? "text-destructive"
                             : isExpiringSoon(doc.expiry_date)
-                            ? "text-yellow-600"
-                            : ""
-                        }`}
+                              ? "text-yellow-600"
+                              : ""
+                          }`}
                       >
                         <AlertCircle className="h-4 w-4" />
                         <span>
@@ -522,13 +550,15 @@ export default function Documents() {
                       <Download className="h-4 w-4 mr-1" />
                       Download
                     </Button>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => handleDelete(doc)}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
+                    {hasDetailedPermission('documents', 'delete') && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => handleDelete(doc)}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    )}
                   </div>
                 </CardContent>
               </Card>
@@ -612,12 +642,29 @@ export default function Documents() {
 
             <div>
               <Label htmlFor="expiryDate">Expiry Date (optional)</Label>
-              <Input
-                id="expiryDate"
-                type="date"
-                value={uploadExpiryDate}
-                onChange={(e) => setUploadExpiryDate(e.target.value)}
-              />
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    className={`w-full justify-start text-left font-normal ${!uploadExpiryDate && "text-muted-foreground"}`}
+                  >
+                    <CalendarIcon className="mr-2 h-4 w-4" />
+                    {uploadExpiryDate ? (
+                      format(new Date(uploadExpiryDate), "PPP")
+                    ) : (
+                      <span>Pick a date</span>
+                    )}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0">
+                  <Calendar
+                    mode="single"
+                    selected={uploadExpiryDate ? new Date(uploadExpiryDate) : undefined}
+                    onSelect={(date) => setUploadExpiryDate(date ? format(date, "yyyy-MM-dd") : "")}
+                    initialFocus
+                  />
+                </PopoverContent>
+              </Popover>
               <p className="text-xs text-muted-foreground mt-1">
                 For certificates, permits, licenses, etc.
               </p>

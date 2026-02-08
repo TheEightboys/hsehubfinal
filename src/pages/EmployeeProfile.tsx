@@ -166,7 +166,7 @@ export default function EmployeeProfile() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { companyId, user } = useAuth();
-  const { hasPermission } = usePermissions();
+  const { hasPermission, hasDetailedPermission } = usePermissions();
 
   const [employee, setEmployee] = useState<EmployeeData | null>(null);
   const [editMode, setEditMode] = useState<{ [key: string]: boolean }>({});
@@ -213,6 +213,13 @@ export default function EmployeeProfile() {
   const [notesMentionSearch, setNotesMentionSearch] = useState("");
   const [cursorPosition, setCursorPosition] = useState(0);
 
+  // Enhanced note visibility state
+  const [noteVisibilityMode, setNoteVisibilityMode] = useState<'everyone' | 'specific'>('everyone');
+  const [selectedVisibilityUsers, setSelectedVisibilityUsers] = useState<string[]>([]);
+
+  // Ref for notes textarea to handle formatting
+  const notesTextareaRef = useRef<HTMLTextAreaElement>(null);
+
   // Note reply state
   const [replyingToNoteId, setReplyingToNoteId] = useState<string | null>(null);
   const [replyText, setReplyText] = useState("");
@@ -233,6 +240,11 @@ export default function EmployeeProfile() {
   const [profileFields, setProfileFields] = useState<any[]>([]);
   const [showProfileFieldMenu, setShowProfileFieldMenu] = useState(false);
   const [showAllProfileFields, setShowAllProfileFields] = useState(false);
+
+  // Profile field templates from settings
+  const [profileFieldTemplates, setProfileFieldTemplates] = useState<any[]>([]);
+  const [showTemplateDialog, setShowTemplateDialog] = useState(false);
+  const [selectedTemplateIds, setSelectedTemplateIds] = useState<string[]>([]);
 
   // Debounce timer ref for profile field updates
   const debounceTimerRef = useRef<{ [key: string]: NodeJS.Timeout }>({});
@@ -297,6 +309,7 @@ export default function EmployeeProfile() {
       fetchEmployees();
       fetchGInvestigations();
       fetchProfileFields();
+      fetchProfileFieldTemplates();
       fetchTeamMembers();
       fetchUserProfile(); // Fetch logged-in user's profile for note authorship
     }
@@ -700,6 +713,82 @@ export default function EmployeeProfile() {
     }
   };
 
+  const fetchProfileFieldTemplates = async () => {
+    if (!companyId) return;
+
+    try {
+      const { data, error } = await supabase
+        .from("profile_fields")
+        .select("*")
+        .eq("company_id", companyId)
+        .order("display_order", { ascending: true });
+
+      if (error) {
+        console.log("No profile field templates found");
+        setProfileFieldTemplates([]);
+        return;
+      }
+
+      setProfileFieldTemplates(data || []);
+    } catch (error) {
+      console.error("Error fetching profile field templates:", error);
+      setProfileFieldTemplates([]);
+    }
+  };
+
+  const applyTemplate = async () => {
+    if (selectedTemplateIds.length === 0) {
+      toast.error("Please select at least one template field to apply");
+      return;
+    }
+
+    try {
+      // Filter to only selected templates
+      const selectedTemplates = profileFieldTemplates.filter(template =>
+        selectedTemplateIds.includes(template.id)
+      );
+
+      // Convert selected templates to profile fields format
+      const newFields = selectedTemplates.map((template) => ({
+        id: `${template.field_name}_${Date.now()}`,
+        label: template.field_label,
+        type: template.field_type === "text" ? "Single-line text" :
+          template.field_type === "number" ? "Number" :
+            template.field_type === "date" ? "Date" :
+              template.field_type === "boolean" ? "Yes/No" : "Single-line text",
+        value: template.field_type === "boolean" ? false : "",
+        is_required: template.is_required,
+        extracted_from_resume: template.extracted_from_resume,
+        created_at: new Date().toISOString(),
+      }));
+
+      const updatedFields = [...profileFields, ...newFields];
+
+      const { error } = await supabase
+        .from("employees")
+        .update({ profile_fields: updatedFields })
+        .eq("id", id);
+
+      if (error) throw error;
+
+      setProfileFields(updatedFields);
+      setShowTemplateDialog(false);
+      setSelectedTemplateIds([]); // Reset selection
+      toast.success(`Applied ${newFields.length} profile field${newFields.length !== 1 ? 's' : ''} from template`);
+
+      await logActivity(
+        "Applied profile field template",
+        "create",
+        `Added ${newFields.length} fields from Settings template`,
+        { fieldsAdded: newFields.length, templates: selectedTemplates.map(t => t.field_label) }
+      );
+      await fetchActivityLogs();
+    } catch (error) {
+      console.error("Error applying template:", error);
+      toast.error("Failed to apply template");
+    }
+  };
+
   const handleAddProfileField = async (fieldType: string) => {
     const fieldName = `${fieldType
       .replace(/\s+/g, "_")
@@ -957,17 +1046,11 @@ export default function EmployeeProfile() {
         // If parsing fails, treat as empty
       }
 
-      // Get the SELECTED user's name from the dropdown (not the logged-in user)
+      // Use logged-in user as author (updated logic)
       let authorName = "Anonymous";
       let authorRole = "";
-
-      // Find the selected team member from the dropdown
-      const selectedMember = teamMembers.find((m) => m.id === selectedNoteVisibility);
-      if (selectedMember) {
-        authorName = `${selectedMember.first_name} ${selectedMember.last_name}`;
-        authorRole = selectedMember.role || "User";
-      } else if (userProfile) {
-        // Fallback to logged-in user if no selection
+      let authorId = user?.id || null;
+      if (userProfile) {
         if (userProfile.first_name && userProfile.last_name) {
           authorName = `${userProfile.first_name} ${userProfile.last_name}`;
         } else if (userProfile.full_name) {
@@ -975,16 +1058,22 @@ export default function EmployeeProfile() {
         } else if (userProfile.email) {
           authorName = userProfile.email;
         }
+        authorRole = userProfile.role || "";
       }
+
+      // Determine visibility based on the new mode
+      const visibleTo = noteVisibilityMode === 'everyone'
+        ? 'everyone'
+        : selectedVisibilityUsers;
 
       const newNoteObj = {
         id: Date.now().toString(),
         content: notes,
         author: authorName,
-        author_role: authorRole, // Store the author's role
-        author_id: selectedNoteVisibility || user?.id || null, // Store selected user ID
+        author_role: authorRole,
+        author_id: authorId,
         date: new Date().toISOString(),
-        visibleTo: selectedNoteVisibility, // Keep visibility tracking
+        visibleTo: visibleTo, // 'everyone' or array of user IDs
         replies: [],
       };
 
@@ -1007,6 +1096,9 @@ export default function EmployeeProfile() {
       toast.success("Note added successfully");
       setNotes("");
       setShowNotesMentionDropdown(false);
+      // Reset visibility to 'everyone' after saving
+      setNoteVisibilityMode('everyone');
+      setSelectedVisibilityUsers([]);
       fetchEmployeeData();
     } catch (error) {
       console.error("Error saving notes:", error);
@@ -1263,6 +1355,56 @@ export default function EmployeeProfile() {
   const filteredNotesEmployees = employees.filter((emp) =>
     emp.full_name.toLowerCase().includes(notesMentionSearch.toLowerCase())
   );
+
+  // Rich text formatting functions
+  const applyFormatting = (formatType: 'bold' | 'italic' | 'underline' | 'list' | 'link') => {
+    const textarea = notesTextareaRef.current;
+    if (!textarea) return;
+
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+    const selectedText = notes.substring(start, end);
+    let newText = '';
+    let cursorOffset = 0;
+
+    switch (formatType) {
+      case 'bold':
+        newText = selectedText ? `**${selectedText}**` : '**bold text**';
+        cursorOffset = selectedText ? 2 : 2;
+        break;
+      case 'italic':
+        newText = selectedText ? `*${selectedText}*` : '*italic text*';
+        cursorOffset = selectedText ? 1 : 1;
+        break;
+      case 'underline':
+        newText = selectedText ? `<u>${selectedText}</u>` : '<u>underlined text</u>';
+        cursorOffset = selectedText ? 3 : 3;
+        break;
+      case 'list':
+        const lines = (selectedText || 'List item').split('\n');
+        newText = lines.map(line => line.trim() ? `- ${line}` : line).join('\n');
+        cursorOffset = 2;
+        break;
+      case 'link':
+        newText = selectedText ? `[${selectedText}](url)` : '[link text](url)';
+        cursorOffset = selectedText ? selectedText.length + 3 : 12;
+        break;
+    }
+
+    const before = notes.substring(0, start);
+    const after = notes.substring(end);
+    const updatedNotes = before + newText + after;
+
+    setNotes(updatedNotes);
+
+    setTimeout(() => {
+      if (textarea) {
+        const newCursorPos = start + (selectedText ? newText.length : cursorOffset);
+        textarea.focus();
+        textarea.setSelectionRange(newCursorPos, newCursorPos);
+      }
+    }, 0);
+  };
 
   const handleAddTag = async () => {
     if (!newTag.trim()) return;
@@ -1609,6 +1751,12 @@ export default function EmployeeProfile() {
   };
 
   const handleCreateCheckup = async () => {
+    // Check permission before allowing health examination creation
+    if (!hasDetailedPermission('health_examinations', 'create_edit')) {
+      toast.error("You do not have permission to create health examinations");
+      return;
+    }
+
     // Only G-Investigation is required, appointment date is optional
     if (!checkupFormData.investigation_id) {
       toast.error("Please select a G-Investigation");
@@ -1785,6 +1933,12 @@ export default function EmployeeProfile() {
   };
 
   const handleDeleteCheckup = async (checkupId: string) => {
+    // Check permission before allowing health examination deletion
+    if (!hasDetailedPermission('health_examinations', 'delete')) {
+      toast.error("You do not have permission to delete health examinations");
+      return;
+    }
+
     if (!confirm("Are you sure you want to delete this check-up?")) return;
 
     try {
@@ -2336,82 +2490,97 @@ export default function EmployeeProfile() {
                     <div className="flex items-center justify-between">
                       <CardTitle className="text-lg">Profile Fields</CardTitle>
 
-                      {/* Add profile field button on the right */}
-                      <div className="relative">
+                      {/* Action buttons on the right */}
+                      <div className="flex items-center gap-2">
+                        {/* Use Template Button */}
                         <Button
-                          variant="ghost"
+                          variant="outline"
                           size="sm"
-                          className="text-xs h-8 text-muted-foreground"
-                          onClick={() =>
-                            setShowProfileFieldMenu(!showProfileFieldMenu)
-                          }
+                          className="text-xs h-8"
+                          onClick={() => setShowTemplateDialog(true)}
+                          disabled={profileFieldTemplates.length === 0}
                         >
-                          <Plus className="w-3 h-3 mr-1" />
-                          Add profile field
-                          <ChevronDown className="w-3 h-3 ml-1" />
+                          <FileText className="w-3 h-3 mr-1" />
+                          Use Template
                         </Button>
 
-                        {showProfileFieldMenu && (
-                          <Card className="absolute top-full right-0 mt-1 w-48 z-50 shadow-lg">
-                            <CardContent className="p-2">
-                              <div className="space-y-1">
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  className="w-full justify-start text-xs"
-                                  onClick={() =>
-                                    handleAddProfileField("Single-line text")
-                                  }
-                                >
-                                  <FileText className="w-3 h-3 mr-2" />
-                                  Single-line text
-                                </Button>
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  className="w-full justify-start text-xs"
-                                  onClick={() =>
-                                    handleAddProfileField("Multi-line text")
-                                  }
-                                >
-                                  <List className="w-3 h-3 mr-2" />
-                                  Multi-line text
-                                </Button>
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  className="w-full justify-start text-xs"
-                                  onClick={() =>
-                                    handleAddProfileField("Yes/No")
-                                  }
-                                >
-                                  <CheckCircle className="w-3 h-3 mr-2" />
-                                  Yes / No
-                                </Button>
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  className="w-full justify-start text-xs"
-                                  onClick={() => handleAddProfileField("Date")}
-                                >
-                                  <CalendarIcon className="w-3 h-3 mr-2" />
-                                  Date
-                                </Button>
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  className="w-full justify-start text-xs"
-                                  onClick={() =>
-                                    handleAddProfileField("Number")
-                                  }
-                                >
-                                  <Hash className="w-3 h-3 mr-2" />
-                                  Number
-                                </Button>
-                              </div>
-                            </CardContent>
-                          </Card>
-                        )}
+                        {/* Add profile field button */}
+                        <div className="relative">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="text-xs h-8 text-muted-foreground"
+                            onClick={() =>
+                              setShowProfileFieldMenu(!showProfileFieldMenu)
+                            }
+                          >
+                            <Plus className="w-3 h-3 mr-1" />
+                            Add profile field
+                            <ChevronDown className="w-3 h-3 ml-1" />
+                          </Button>
+
+                          {showProfileFieldMenu && (
+                            <Card className="absolute top-full right-0 mt-1 w-48 z-50 shadow-lg">
+                              <CardContent className="p-2">
+                                <div className="space-y-1">
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="w-full justify-start text-xs"
+                                    onClick={() =>
+                                      handleAddProfileField("Single-line text")
+                                    }
+                                  >
+                                    <FileText className="w-3 h-3 mr-2" />
+                                    Single-line text
+                                  </Button>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="w-full justify-start text-xs"
+                                    onClick={() =>
+                                      handleAddProfileField("Multi-line text")
+                                    }
+                                  >
+                                    <List className="w-3 h-3 mr-2" />
+                                    Multi-line text
+                                  </Button>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="w-full justify-start text-xs"
+                                    onClick={() =>
+                                      handleAddProfileField("Yes/No")
+                                    }
+                                  >
+                                    <CheckCircle className="w-3 h-3 mr-2" />
+                                    Yes / No
+                                  </Button>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="w-full justify-start text-xs"
+                                    onClick={() => handleAddProfileField("Date")}
+                                  >
+                                    <CalendarIcon className="w-3 h-3 mr-2" />
+                                    Date
+                                  </Button>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="w-full justify-start text-xs"
+                                    onClick={() =>
+                                      handleAddProfileField("Number")
+                                    }
+                                  >
+                                    <Hash className="w-3 h-3 mr-2" />
+                                    Number
+                                  </Button>
+                                </div>
+                              </CardContent>
+                            </Card>
+                          )}
+                        </div>
                       </div>
                     </div>
                   </CardHeader>
@@ -2688,15 +2857,38 @@ export default function EmployeeProfile() {
                                   </span>
                                 </div>
                               ) : field.type === "Date" ? (
-                                <Input
-                                  type="date"
-                                  value={customFieldEditValue || ""}
-                                  onChange={(e) =>
-                                    setCustomFieldEditValue(e.target.value)
-                                  }
-                                  className="text-sm"
-                                  autoFocus
-                                />
+                                <Popover>
+                                  <PopoverTrigger asChild>
+                                    <Button
+                                      variant="outline"
+                                      className={`w-full justify-start text-left font-normal text-sm h-10 ${!customFieldEditValue && "text-muted-foreground"
+                                        }`}
+                                    >
+                                      <CalendarIcon className="mr-2 h-4 w-4" />
+                                      {customFieldEditValue ? (
+                                        format(new Date(customFieldEditValue), "PPP")
+                                      ) : (
+                                        <span>Pick a date</span>
+                                      )}
+                                    </Button>
+                                  </PopoverTrigger>
+                                  <PopoverContent className="w-auto p-0">
+                                    <Calendar
+                                      mode="single"
+                                      selected={
+                                        customFieldEditValue
+                                          ? new Date(customFieldEditValue)
+                                          : undefined
+                                      }
+                                      onSelect={(date) =>
+                                        setCustomFieldEditValue(
+                                          date ? format(date, "yyyy-MM-dd") : ""
+                                        )
+                                      }
+                                      initialFocus
+                                    />
+                                  </PopoverContent>
+                                </Popover>
                               ) : field.type === "Number" ? (
                                 <Input
                                   type="number"
@@ -2785,6 +2977,113 @@ export default function EmployeeProfile() {
                     </div>
                   </CardContent>
                 </Card>
+
+                {/* Use Template Dialog */}
+                <Dialog open={showTemplateDialog} onOpenChange={(open) => {
+                  setShowTemplateDialog(open);
+                  if (!open) setSelectedTemplateIds([]); // Reset on close
+                }}>
+                  <DialogContent className="sm:max-w-[600px]">
+                    <DialogHeader>
+                      <DialogTitle>Use Profile Field Template</DialogTitle>
+                      <DialogDescription>
+                        Select which profile fields from Settings to apply to this employee.
+                      </DialogDescription>
+                    </DialogHeader>
+                    <div className="py-4">
+                      {profileFieldTemplates.length === 0 ? (
+                        <div className="text-center py-8 text-muted-foreground">
+                          <FileText className="w-12 h-12 mx-auto mb-4 opacity-50" />
+                          <p className="font-medium mb-2">No templates available</p>
+                          <p className="text-sm">Go to Settings → Profile Fields to create templates</p>
+                        </div>
+                      ) : (
+                        <div className="space-y-4">
+                          <div className="flex items-center justify-between">
+                            <div className="text-sm text-muted-foreground">
+                              {selectedTemplateIds.length} of {profileFieldTemplates.length} selected
+                            </div>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="text-xs h-7"
+                              onClick={() => {
+                                if (selectedTemplateIds.length === profileFieldTemplates.length) {
+                                  setSelectedTemplateIds([]);
+                                } else {
+                                  setSelectedTemplateIds(profileFieldTemplates.map(t => t.id));
+                                }
+                              }}
+                            >
+                              {selectedTemplateIds.length === profileFieldTemplates.length ? 'Deselect All' : 'Select All'}
+                            </Button>
+                          </div>
+                          <div className="max-h-[300px] overflow-y-auto space-y-2 border rounded-lg p-3 bg-muted/20">
+                            {profileFieldTemplates.map((template, index) => {
+                              const isSelected = selectedTemplateIds.includes(template.id);
+                              return (
+                                <div
+                                  key={template.id}
+                                  className={`flex items-center gap-3 p-2 border rounded text-sm cursor-pointer transition-colors ${isSelected
+                                    ? 'bg-primary/10 border-primary'
+                                    : 'bg-background hover:bg-muted/50'
+                                    }`}
+                                  onClick={() => {
+                                    setSelectedTemplateIds(prev =>
+                                      prev.includes(template.id)
+                                        ? prev.filter(id => id !== template.id)
+                                        : [...prev, template.id]
+                                    );
+                                  }}
+                                >
+                                  <input
+                                    type="checkbox"
+                                    checked={isSelected}
+                                    onChange={() => { }}
+                                    className="w-4 h-4 cursor-pointer"
+                                  />
+                                  <div className="w-6 h-6 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xs font-medium">
+                                    {index + 1}
+                                  </div>
+                                  <div className="flex-1">
+                                    <div className="font-medium">{template.field_label}</div>
+                                    <div className="text-xs text-muted-foreground flex items-center gap-2 mt-1">
+                                      <span className="capitalize">{template.field_type}</span>
+                                      {template.is_required && (
+                                        <span className="text-destructive">• Required</span>
+                                      )}
+                                      {template.extracted_from_resume && (
+                                        <span className="text-green-600">• Resume Extract</span>
+                                      )}
+                                    </div>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                    <DialogFooter>
+                      <Button
+                        variant="outline"
+                        onClick={() => {
+                          setShowTemplateDialog(false);
+                          setSelectedTemplateIds([]);
+                        }}
+                      >
+                        Cancel
+                      </Button>
+                      <Button
+                        onClick={applyTemplate}
+                        disabled={selectedTemplateIds.length === 0}
+                      >
+                        <CheckCircle className="w-4 h-4 mr-2" />
+                        Apply {selectedTemplateIds.length > 0 ? `(${selectedTemplateIds.length})` : 'Template'}
+                      </Button>
+                    </DialogFooter>
+                  </DialogContent>
+                </Dialog>
               </div>
 
               {/* Right Column - Tasks & Notes */}
@@ -3090,6 +3389,7 @@ export default function EmployeeProfile() {
                               variant="ghost"
                               size="sm"
                               className="h-7 w-7 p-0"
+                              onClick={() => applyFormatting('bold')}
                             >
                               <Bold className="w-3.5 h-3.5" />
                             </Button>
@@ -3097,6 +3397,7 @@ export default function EmployeeProfile() {
                               variant="ghost"
                               size="sm"
                               className="h-7 w-7 p-0"
+                              onClick={() => applyFormatting('italic')}
                             >
                               <Italic className="w-3.5 h-3.5" />
                             </Button>
@@ -3104,6 +3405,7 @@ export default function EmployeeProfile() {
                               variant="ghost"
                               size="sm"
                               className="h-7 w-7 p-0"
+                              onClick={() => applyFormatting('underline')}
                             >
                               <Underline className="w-3.5 h-3.5" />
                             </Button>
@@ -3112,6 +3414,7 @@ export default function EmployeeProfile() {
                               variant="ghost"
                               size="sm"
                               className="h-7 w-7 p-0"
+                              onClick={() => applyFormatting('list')}
                             >
                               <List className="w-3.5 h-3.5" />
                             </Button>
@@ -3119,6 +3422,7 @@ export default function EmployeeProfile() {
                               variant="ghost"
                               size="sm"
                               className="h-7 w-7 p-0"
+                              onClick={() => applyFormatting('link')}
                             >
                               <Link className="w-3.5 h-3.5" />
                             </Button>
@@ -3150,6 +3454,7 @@ export default function EmployeeProfile() {
                           {/* Textarea */}
                           <div className="relative">
                             <Textarea
+                              ref={notesTextareaRef}
                               placeholder="Add a note..."
                               value={notes}
                               onChange={handleNotesChange}
@@ -3180,27 +3485,90 @@ export default function EmployeeProfile() {
                               )}
                           </div>
 
-                          {/* Visibility Dropdown */}
+                          {/* Enhanced Visibility Selector */}
                           <div className="flex items-center gap-2 pt-2">
                             <Eye className="w-3.5 h-3.5 text-muted-foreground" />
-                            <Select
-                              value={selectedNoteVisibility}
-                              onValueChange={setSelectedNoteVisibility}
-                            >
-                              <SelectTrigger className="h-7 text-xs w-auto border-0 px-0 gap-1 hover:bg-transparent focus:ring-0">
-                                <SelectValue placeholder="Select user" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {teamMembers.map((member) => (
-                                  <SelectItem
-                                    key={member.id}
-                                    value={member.id}
+                            <div className="flex items-center gap-2">
+                              {/* Everyone Button */}
+                              <Button
+                                variant={noteVisibilityMode === 'everyone' ? 'default' : 'outline'}
+                                size="sm"
+                                className="h-7 text-xs"
+                                onClick={() => {
+                                  setNoteVisibilityMode('everyone');
+                                  setSelectedVisibilityUsers([]);
+                                }}
+                              >
+                                Everyone
+                              </Button>
+
+                              {/* Specific Users Button */}
+                              <Popover>
+                                <PopoverTrigger asChild>
+                                  <Button
+                                    variant={noteVisibilityMode === 'specific' ? 'default' : 'outline'}
+                                    size="sm"
+                                    className="h-7 text-xs"
                                   >
-                                    {member.first_name} {member.last_name} ({member.role || "User"})
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
+                                    Specific Users
+                                    {selectedVisibilityUsers.length > 0 && (
+                                      <Badge variant="secondary" className="ml-2 text-xs h-4 px-1">
+                                        {selectedVisibilityUsers.length}
+                                      </Badge>
+                                    )}
+                                  </Button>
+                                </PopoverTrigger>
+                                <PopoverContent className="w-64 p-0" align="start">
+                                  <Card className="border-0 shadow-none">
+                                    <CardHeader className="p-3 pb-2">
+                                      <CardTitle className="text-sm">Select Users</CardTitle>
+                                      <CardDescription className="text-xs">
+                                        Choose who can see this note
+                                      </CardDescription>
+                                    </CardHeader>
+                                    <CardContent className="p-0">
+                                      <ScrollArea className="h-48">
+                                        <div className="p-2 space-y-1">
+                                          {teamMembers.map((member) => {
+                                            const isSelected = selectedVisibilityUsers.includes(member.id);
+                                            return (
+                                              <div
+                                                key={member.id}
+                                                className={`flex items-center gap-2 p-2 rounded cursor-pointer hover:bg-muted ${isSelected ? 'bg-primary/10' : ''
+                                                  }`}
+                                                onClick={() => {
+                                                  setNoteVisibilityMode('specific');
+                                                  setSelectedVisibilityUsers(prev =>
+                                                    prev.includes(member.id)
+                                                      ? prev.filter(id => id !== member.id)
+                                                      : [...prev, member.id]
+                                                  );
+                                                }}
+                                              >
+                                                <input
+                                                  type="checkbox"
+                                                  checked={isSelected}
+                                                  onChange={() => { }}
+                                                  className="w-3.5 h-3.5 cursor-pointer"
+                                                />
+                                                <div className="flex-1 text-xs">
+                                                  <div className="font-medium">
+                                                    {member.first_name} {member.last_name}
+                                                  </div>
+                                                  <div className="text-muted-foreground text-xs">
+                                                    {member.role || 'User'}
+                                                  </div>
+                                                </div>
+                                              </div>
+                                            );
+                                          })}
+                                        </div>
+                                      </ScrollArea>
+                                    </CardContent>
+                                  </Card>
+                                </PopoverContent>
+                              </Popover>
+                            </div>
                           </div>
                         </div>
 
@@ -3824,30 +4192,66 @@ export default function EmployeeProfile() {
                   <div className="grid grid-cols-2 gap-4">
                     <div>
                       <Label>Appointment Date (optional)</Label>
-                      <Input
-                        type="date"
-                        value={checkupFormData.appointment_date}
-                        onChange={(e) =>
-                          setCheckupFormData({
-                            ...checkupFormData,
-                            appointment_date: e.target.value,
-                          })
-                        }
-                      />
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <Button
+                            variant="outline"
+                            className={`w-full justify-start text-left font-normal ${!checkupFormData.appointment_date && "text-muted-foreground"}`}
+                          >
+                            <CalendarIcon className="mr-2 h-4 w-4" />
+                            {checkupFormData.appointment_date ? (
+                              format(new Date(checkupFormData.appointment_date), "PPP")
+                            ) : (
+                              <span>Pick a date</span>
+                            )}
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-auto p-0">
+                          <Calendar
+                            mode="single"
+                            selected={checkupFormData.appointment_date ? new Date(checkupFormData.appointment_date) : undefined}
+                            onSelect={(date) =>
+                              setCheckupFormData({
+                                ...checkupFormData,
+                                appointment_date: date ? format(date, "yyyy-MM-dd") : "",
+                              })
+                            }
+                            initialFocus
+                          />
+                        </PopoverContent>
+                      </Popover>
                     </div>
 
                     <div>
                       <Label>Due Date</Label>
-                      <Input
-                        type="date"
-                        value={checkupFormData.due_date}
-                        onChange={(e) =>
-                          setCheckupFormData({
-                            ...checkupFormData,
-                            due_date: e.target.value,
-                          })
-                        }
-                      />
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <Button
+                            variant="outline"
+                            className={`w-full justify-start text-left font-normal ${!checkupFormData.due_date && "text-muted-foreground"}`}
+                          >
+                            <CalendarIcon className="mr-2 h-4 w-4" />
+                            {checkupFormData.due_date ? (
+                              format(new Date(checkupFormData.due_date), "PPP")
+                            ) : (
+                              <span>Pick a date</span>
+                            )}
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-auto p-0">
+                          <Calendar
+                            mode="single"
+                            selected={checkupFormData.due_date ? new Date(checkupFormData.due_date) : undefined}
+                            onSelect={(date) =>
+                              setCheckupFormData({
+                                ...checkupFormData,
+                                due_date: date ? format(date, "yyyy-MM-dd") : "",
+                              })
+                            }
+                            initialFocus
+                          />
+                        </PopoverContent>
+                      </Popover>
                     </div>
                   </div>
 
@@ -3876,16 +4280,34 @@ export default function EmployeeProfile() {
                   {checkupFormData.status === "done" && (
                     <div>
                       <Label>Completion Date *</Label>
-                      <Input
-                        type="date"
-                        value={checkupFormData.completion_date}
-                        onChange={(e) =>
-                          setCheckupFormData({
-                            ...checkupFormData,
-                            completion_date: e.target.value,
-                          })
-                        }
-                      />
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <Button
+                            variant="outline"
+                            className={`w-full justify-start text-left font-normal ${!checkupFormData.completion_date && "text-muted-foreground"}`}
+                          >
+                            <CalendarIcon className="mr-2 h-4 w-4" />
+                            {checkupFormData.completion_date ? (
+                              format(new Date(checkupFormData.completion_date), "PPP")
+                            ) : (
+                              <span>Pick a date</span>
+                            )}
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-auto p-0">
+                          <Calendar
+                            mode="single"
+                            selected={checkupFormData.completion_date ? new Date(checkupFormData.completion_date) : undefined}
+                            onSelect={(date) =>
+                              setCheckupFormData({
+                                ...checkupFormData,
+                                completion_date: date ? format(date, "yyyy-MM-dd") : "",
+                              })
+                            }
+                            initialFocus
+                          />
+                        </PopoverContent>
+                      </Popover>
                     </div>
                   )}
 
@@ -3970,6 +4392,7 @@ export default function EmployeeProfile() {
                       if (appointmentDate && selectedCheckupForAppointment) {
                         handleUpdateCheckup(selectedCheckupForAppointment.id, {
                           appointment_date: format(appointmentDate, "yyyy-MM-dd"),
+                          status: 'planned',
                         });
                         setIsAppointmentDialogOpen(false);
                       } else {

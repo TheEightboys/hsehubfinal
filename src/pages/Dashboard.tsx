@@ -69,6 +69,56 @@ export default function Dashboard() {
   const [investigationStats, setInvestigationStats] = useState<any[]>([]);
   const [tasks, setTasks] = useState<any[]>([]);
   const [taskStatusFilter, setTaskStatusFilter] = useState<string>("upcoming");
+  const [currentEmployeeId, setCurrentEmployeeId] = useState<string | null>(null);
+
+  useEffect(() => {
+    const fetchEmployeeId = async () => {
+      if (user?.email && companyId) {
+        console.log("🔍 Looking up Employee ID for:", user.email, "Company:", companyId);
+
+        // Find employee by email and company_id (Reliable fallback since auth_user_id column might not exist)
+        // Use ilike for case-insensitive matching
+        const { data: empByEmail, error } = await supabase
+          .from("employees")
+          .select("id")
+          .eq("email", user.email) // Supabase email column is usually case sensitive if using eq, but let's try strict first.
+          // actually, let's use ilike to be safe.
+          // .ilike("email", user.email) -> syntax: .ilike('email', user.email)
+          .eq("company_id", companyId)
+          .maybeSingle();
+
+        // If eq failed, try ilike manually or just rely on what we have. 
+        // Actually, let's stick to eq first but log the error.
+
+        if (error) {
+          console.error("❌ Error fetching employee ID:", error);
+        }
+
+        if (empByEmail) {
+          console.log("✅ Found Employee ID:", empByEmail.id);
+          setCurrentEmployeeId(empByEmail.id);
+        } else {
+          console.log("⚠️ No employee profile linked to this email.");
+          // Try fallback case-insensitive search if primary failed
+          const { data: empByEmailInsen } = await supabase
+            .from("employees")
+            .select("id")
+            .ilike("email", user.email)
+            .eq("company_id", companyId)
+            .maybeSingle();
+
+          if (empByEmailInsen) {
+            console.log("✅ Found Employee ID (Case Insensitive):", empByEmailInsen.id);
+            setCurrentEmployeeId(empByEmailInsen.id);
+          }
+        }
+      }
+    };
+
+    if (user && companyId) {
+      fetchEmployeeId();
+    }
+  }, [user, companyId]);
 
   useEffect(() => {
     if (!loading && !user) {
@@ -85,10 +135,10 @@ export default function Dashboard() {
   }, [companyId, userRole, taskStatusFilter]);
 
   useEffect(() => {
-    if (companyId && userRole !== "super_admin") {
+    if (companyId && userRole !== "super_admin" && currentEmployeeId) {
       fetchTasks();
     }
-  }, [companyId, userRole]);
+  }, [companyId, userRole, currentEmployeeId]);
 
   const fetchStats = async () => {
     if (!companyId) return;
@@ -216,20 +266,18 @@ export default function Dashboard() {
       console.log("=== Fetching Investigation Stats ===");
       console.log("Company ID:", companyId);
 
-      // Fetch both health checkups and investigations
-      const [checkupsResult, investigationsResult] = await Promise.all([
-        supabase
-          .from("health_checkups")
-          .select("id, status")
-          .eq("company_id", companyId),
-        supabase
-          .from("investigations" as any)
-          .select("id, status")
-          .eq("company_id", companyId)
-      ]);
+      // Fetch ONLY health checkups as per user requirement (ignoring 'investigations' table)
+      const { data: checkupsData, error: checkupsError } = await supabase
+        .from("health_checkups")
+        .select("id, status")
+        .eq("company_id", companyId);
 
-      console.log("✅ Health checkups fetched:", checkupsResult.data?.length || 0);
-      console.log("✅ Investigations fetched:", investigationsResult.data?.length || 0);
+      if (checkupsError) throw checkupsError;
+
+      console.log("✅ Health checkups fetched:", checkupsData?.length || 0);
+
+      // Mock investigations result to keep existing logic structure temporarily (or rewrite below)
+      // Actually, better to rewrite the processing logic here.
 
       // Initialize status counts
       const statusCounts = {
@@ -239,75 +287,45 @@ export default function Dashboard() {
         done: 0,
       };
 
-      // Count health checkups (status: open, planned, due, done)
-      checkupsResult.data?.forEach((checkup: any) => {
-        if (checkup.status in statusCounts) {
-          statusCounts[checkup.status as keyof typeof statusCounts]++;
-        }
+      checkupsData?.forEach((checkup: any) => {
+        const status = (checkup.status || "").toLowerCase();
+        if (status === "open" || status === "in_progress") statusCounts.open++;
+        else if (status === "planned") statusCounts.planned++;
+        else if (status === "due") statusCounts.due++;
+        else if (status === "done" || status === "completed" || status === "closed") statusCounts.done++;
+        else statusCounts.open++;
       });
 
-      // Count investigations (status: due, planned, completed)
-      // Map investigation statuses to our unified status system
-      investigationsResult.data?.forEach((investigation: any) => {
-        const status = investigation.status;
-        if (status === "due") {
-          statusCounts.due++;
-        } else if (status === "planned") {
-          statusCounts.planned++;
-        } else if (status === "completed") {
-          statusCounts.done++;
-        }
-      });
-
-      const total =
-        statusCounts.open +
-        statusCounts.planned +
-        statusCounts.due +
-        statusCounts.done;
+      const total = Object.values(statusCounts).reduce((a, b) => a + b, 0);
 
       console.log("Combined Status Breakdown:", statusCounts);
-      console.log("Total (Checkups + Investigations):", total);
 
       setInvestigationStats([
-        {
-          status: "Open",
-          count: statusCounts.open,
-          color: "#6b7280",
-          percent: statusCounts.open / (total || 1),
-        },
-        {
-          status: "Planned",
-          count: statusCounts.planned,
-          color: "#3b82f6",
-          percent: statusCounts.planned / (total || 1),
-        },
-        {
-          status: "Due",
-          count: statusCounts.due,
-          color: "#f59e0b",
-          percent: statusCounts.due / (total || 1),
-        },
-        {
-          status: "Done",
-          count: statusCounts.done,
-          color: "#10b981",
-          percent: statusCounts.done / (total || 1),
-        },
+        { status: "Open", count: statusCounts.open, color: "#6b7280", percent: statusCounts.open / (total || 1) },
+        { status: "Planned", count: statusCounts.planned, color: "#3b82f6", percent: statusCounts.planned / (total || 1) },
+        { status: "Due", count: statusCounts.due, color: "#f59e0b", percent: statusCounts.due / (total || 1) },
+        { status: "Done", count: statusCounts.done, color: "#10b981", percent: statusCounts.done / (total || 1) },
       ]);
+
+      return; // Early return to skip the old logic below
     } catch (error) {
       console.error("Error fetching investigation stats:", error);
-      // Set empty state on error
-      setInvestigationStats([
-        { status: "Open", count: 0, color: "#6b7280", percent: 0 },
-        { status: "Planned", count: 0, color: "#3b82f6", percent: 0 },
-        { status: "Due", count: 0, color: "#f59e0b", percent: 0 },
-        { status: "Done", count: 0, color: "#10b981", percent: 0 },
-      ]);
     }
   };
 
+
+
   const fetchTasks = async () => {
     if (!companyId) return;
+
+    // Strict privacy check: Non-superadmins MUST have a linked employee profile to see tasks
+    // If we haven't found the employee ID yet, don't show random tasks.
+    // UPDATE: If we have an EMAIL, we can validly search for mentions. 
+    if (userRole !== "super_admin" && userRole !== "company_admin" && !currentEmployeeId && !user?.email) {
+      console.log("Waiting for employee ID or Email to fetch tasks...");
+      setTasks([]);
+      return;
+    }
 
     try {
       let query = supabase
@@ -316,6 +334,7 @@ export default function Dashboard() {
           `
           id,
           title,
+          description,
           due_date,
           status,
           priority,
@@ -333,15 +352,38 @@ export default function Dashboard() {
         query = query.in("status", ["pending", "in_progress"]);
       } else if (taskStatusFilter === "completed") {
         query = query.eq("status", "completed");
-      } else if (taskStatusFilter === "pending") {
-        query = query.eq("status", "pending");
-      } else if (taskStatusFilter === "in_progress") {
-        query = query.eq("status", "in_progress");
       }
-      // "all" filter means no status filtering
+
+      // Filter by assigned employee (current user) OR mentions
+      // Company Admins and Super Admins see ALL tasks for the company
+      // Filter by assigned employee (current user) OR mentions
+      // Company Admins and Super Admins see ALL tasks for the company
+      if (userRole !== "super_admin" && userRole !== "company_admin") {
+        const emailLike = user?.email ? `description.ilike.%${user.email}%` : "";
+
+        if (currentEmployeeId) {
+          if (emailLike) {
+            // ID AND Email available: assigned_to OR mentioned
+            query = query.or(`assigned_to.eq.${currentEmployeeId},${emailLike}`);
+          } else {
+            // Only ID available
+            query = query.eq("assigned_to", currentEmployeeId);
+          }
+        } else if (emailLike) {
+          // Only Email available (Employee profile not linked but User has email)
+          // We can only show tasks where they are mentioned
+          console.log("⚠️ Fetching tasks by Email Mention only (No Employee ID)");
+          // Use .filter because .or requires at least two conditions usually, but filter is raw
+          // actually, query.or works for single clause too but it's cleaner to use .ilike directly if single.
+          // But wait, chain is: select...eq(company)...
+          // query.ilike('description', `%${user.email}%`)
+          query = query.ilike("description", `%${user.email}%`);
+        }
+      }
 
       const { data, error } = await query
-        .order("due_date", { ascending: true })
+        .order("due_date", { ascending: true, nullsFirst: false })
+        .order("created_at", { ascending: false })
         .limit(20);
 
       if (error) {
@@ -432,14 +474,16 @@ export default function Dashboard() {
         </div>
 
         {/* Show setup button when user is logged in but has no company */}
-        {user && !companyId && (
-          <div className="ml-4">
-            <Button onClick={() => navigate("/setup-company")}>
-              {t("dashboard.setupCompany")}
-            </Button>
-          </div>
-        )}
-      </div>
+        {
+          user && !companyId && (
+            <div className="ml-4">
+              <Button onClick={() => navigate("/setup-company")}>
+                {t("dashboard.setupCompany")}
+              </Button>
+            </div>
+          )
+        }
+      </div >
 
       {userRole === "super_admin" ? (
         <>
@@ -548,10 +592,10 @@ export default function Dashboard() {
               <CardHeader className="pb-4">
                 <CardTitle className="flex items-center gap-2">
                   <ListTodo className="w-5 h-5" />
-                  Investigations by Status
+                  {t("dashboard.investigationsByStatus")}
                 </CardTitle>
                 <CardDescription>
-                  Overview of all investigation status
+                  {t("dashboard.investigationStatusOverview")}
                 </CardDescription>
               </CardHeader>
               <CardContent>
@@ -560,17 +604,12 @@ export default function Dashboard() {
                   0
                 ) === 0 ? (
                   <div className="flex items-center justify-center h-[300px] text-muted-foreground">
-                    No investigations found
+                    {t("investigations.noInvestigations")}
                   </div>
                 ) : (
                   <ResponsiveContainer width="100%" height={300}>
                     <PieChart margin={{ top: 20, right: 30, left: 30, bottom: 0 }}>
-                      <Legend
-                        verticalAlign="bottom"
-                        height={36}
-                        iconSize={10}
-                        wrapperStyle={{ fontSize: '12px', paddingTop: '10px' }}
-                      />
+                      {/* Default Legend removed as requested */}
                       <Pie
                         data={investigationStats}
                         cx="50%"
@@ -579,6 +618,7 @@ export default function Dashboard() {
                         innerRadius={0}
                         fill="#8884d8"
                         dataKey="count"
+                        nameKey="status"
                         stroke="#fff"
                         strokeWidth={2}
                       >
@@ -649,7 +689,7 @@ export default function Dashboard() {
                       size="sm"
                       onClick={() => setTaskStatusFilter("upcoming")}
                     >
-                      Upcoming
+                      {t("dashboard.upcoming")}
                     </Button>
                     <Button
                       variant={
@@ -658,7 +698,7 @@ export default function Dashboard() {
                       size="sm"
                       onClick={() => setTaskStatusFilter("completed")}
                     >
-                      Completed
+                      {t("dashboard.completed")}
                     </Button>
                   </div>
                 </div>
@@ -773,7 +813,8 @@ export default function Dashboard() {
             </Card>
           </div>
         </>
-      )}
-    </div>
+      )
+      }
+    </div >
   );
 }

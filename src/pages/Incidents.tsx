@@ -13,7 +13,14 @@ import {
   Trash2,
   Eye,
   Filter,
+  Calendar as CalendarIcon,
 } from "lucide-react";
+import { Calendar } from "@/components/ui/calendar";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -51,6 +58,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { useAuditLog } from "@/hooks/useAuditLog";
 import { format } from "date-fns";
 
 interface Incident {
@@ -59,11 +67,11 @@ interface Incident {
   title: string;
   description: string | null;
   incident_type:
-    | "injury"
-    | "near_miss"
-    | "property_damage"
-    | "environmental"
-    | "other";
+  | "injury"
+  | "near_miss"
+  | "property_damage"
+  | "environmental"
+  | "other";
   severity: "minor" | "moderate" | "serious" | "critical" | "fatal";
   incident_date: string;
   location: string | null;
@@ -94,6 +102,7 @@ export default function Incidents() {
   const { t } = useLanguage();
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { logAction } = useAuditLog();
 
   const [incidents, setIncidents] = useState<Incident[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
@@ -218,8 +227,8 @@ export default function Incidents() {
         description: formData.description || null,
         incident_type: formData.incident_type,
         severity: formData.severity,
-        incident_date: formData.incident_date 
-          ? new Date(formData.incident_date).toISOString() 
+        incident_date: formData.incident_date
+          ? new Date(formData.incident_date).toISOString()
           : new Date().toISOString(),
         location: formData.location || null,
         department_id:
@@ -246,16 +255,43 @@ export default function Incidents() {
           .eq("id", editingIncident.id);
 
         if (error) throw error;
+
+        logAction({
+          action: "update_incident",
+          targetType: "incident",
+          targetId: editingIncident.id,
+          targetName: formData.title,
+          details: {
+            severity: formData.severity,
+            type: formData.incident_type,
+            status: formData.investigation_status
+          }
+        });
+
         toast({
           title: "Success",
           description: "Incident updated successfully",
         });
       } else {
-        const { error } = await supabase
+        const { data: newIncident, error } = await supabase
           .from("incidents" as any)
-          .insert(incidentData as any);
+          .insert(incidentData as any)
+          .select()
+          .single();
 
         if (error) throw error;
+
+        logAction({
+          action: "create_incident",
+          targetType: "incident",
+          targetId: newIncident?.id,
+          targetName: formData.title,
+          details: {
+            severity: formData.severity,
+            type: formData.incident_type
+          }
+        });
+
         toast({
           title: "Success",
           description: "Incident reported successfully",
@@ -283,6 +319,15 @@ export default function Incidents() {
         .delete()
         .eq("id", id);
       if (error) throw error;
+
+      logAction({
+        action: "delete_incident",
+        targetType: "incident",
+        targetId: id,
+        targetName: "Incident",
+        details: { id }
+      });
+
       toast({ title: "Success", description: "Incident deleted successfully" });
       fetchIncidents();
     } catch (error: any) {
@@ -601,18 +646,34 @@ export default function Incidents() {
                       <Label htmlFor="incident_date">
                         {t("incidents.date")} *
                       </Label>
-                      <Input
-                        id="incident_date"
-                        type="date"
-                        value={formData.incident_date}
-                        onChange={(e) =>
-                          setFormData({
-                            ...formData,
-                            incident_date: e.target.value,
-                          })
-                        }
-                        required
-                      />
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <Button
+                            variant="outline"
+                            className={`w-full justify-start text-left font-normal ${!formData.incident_date && "text-muted-foreground"}`}
+                          >
+                            <CalendarIcon className="mr-2 h-4 w-4" />
+                            {formData.incident_date ? (
+                              format(new Date(formData.incident_date), "PPP")
+                            ) : (
+                              <span>Pick a date</span>
+                            )}
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-auto p-0">
+                          <Calendar
+                            mode="single"
+                            selected={formData.incident_date ? new Date(formData.incident_date) : undefined}
+                            onSelect={(date) =>
+                              setFormData({
+                                ...formData,
+                                incident_date: date ? format(date, "yyyy-MM-dd") : "",
+                              })
+                            }
+                            initialFocus
+                          />
+                        </PopoverContent>
+                      </Popover>
                     </div>
                   </div>
 
@@ -976,6 +1037,6 @@ export default function Incidents() {
           </div>
         </CardContent>
       </Card>
-    </div>
+    </div >
   );
 }

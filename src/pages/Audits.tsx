@@ -1,8 +1,16 @@
 import { useEffect, useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { usePermissions } from "@/hooks/usePermissions";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, Plus, FileDown, Eye, Trash2, Filter } from "lucide-react";
+import { ArrowLeft, Plus, FileDown, Eye, Trash2, Filter, Calendar as CalendarIcon } from "lucide-react";
+import { format } from "date-fns";
+import { Calendar } from "@/components/ui/calendar";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -45,6 +53,7 @@ import {
 export default function Audits() {
   const { user, loading, companyId } = useAuth();
   const { t } = useLanguage();
+  const { hasDetailedPermission } = usePermissions();
   const navigate = useNavigate();
   const { toast } = useToast();
 
@@ -130,6 +139,16 @@ export default function Audits() {
   const createAudit = async () => {
     if (!companyId) return;
 
+    // Check permission before allowing create
+    if (!hasDetailedPermission('audits', 'create_edit')) {
+      toast({
+        title: "Permission Denied",
+        description: "You do not have permission to create audits",
+        variant: "destructive",
+      });
+      return;
+    }
+
     if (!formData.title || !formData.iso_code || !formData.scheduled_date) {
       toast({
         title: "Validation Error",
@@ -200,7 +219,7 @@ export default function Audits() {
           selectedSections = allSelectedCriteria
             .filter((id: string) => id.startsWith(`${isoCode}-section-`))
             .map((id: string) => id.replace(`${isoCode}-section-`, "").trim());
-          
+
           console.log(`Selected sections for ${isoCode}:`, selectedSections);
         }
       }
@@ -291,6 +310,16 @@ export default function Audits() {
   const handleDelete = async () => {
     if (!deleteAudit) return;
 
+    // Check permission before allowing delete
+    if (!hasDetailedPermission('audits', 'create_edit')) {
+      toast({
+        title: "Permission Denied",
+        description: "You do not have permission to delete audits",
+        variant: "destructive",
+      });
+      return;
+    }
+
     try {
       const { error } = await supabase
         .from("audits")
@@ -350,10 +379,12 @@ export default function Audits() {
               </p>
             </div>
           </div>
-          <Button onClick={() => setIsDialogOpen(true)}>
-            <Plus className="w-4 h-4 mr-2" />
-            {t("audits.new")}
-          </Button>
+          {hasDetailedPermission('audits', 'create_edit') && (
+            <Button onClick={() => setIsDialogOpen(true)}>
+              <Plus className="w-4 h-4 mr-2" />
+              {t("audits.new")}
+            </Button>
+          )}
         </div>
       </header>
 
@@ -426,7 +457,7 @@ export default function Audits() {
                           <span>📅 {audit.scheduled_date}</span>
                           <span>
                             👤{" "}
-                            {audit.team_members 
+                            {audit.team_members
                               ? `${audit.team_members.first_name} ${audit.team_members.last_name}`
                               : t("audits.notAssigned")}
                           </span>
@@ -453,13 +484,15 @@ export default function Audits() {
                           <Eye className="w-4 h-4 mr-1" />
                           {t("audits.details")}
                         </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => setDeleteAudit(audit)}
-                        >
-                          <Trash2 className="w-4 h-4 text-destructive" />
-                        </Button>
+                        {hasDetailedPermission('audits', 'create_edit') && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setDeleteAudit(audit)}
+                          >
+                            <Trash2 className="w-4 h-4 text-destructive" />
+                          </Button>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -512,13 +545,31 @@ export default function Audits() {
 
               <div>
                 <Label>{t("audits.scheduledDate")} *</Label>
-                <Input
-                  type="date"
-                  value={formData.scheduled_date}
-                  onChange={(e) =>
-                    setFormData({ ...formData, scheduled_date: e.target.value })
-                  }
-                />
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      className={`w-full justify-start text-left font-normal ${!formData.scheduled_date && "text-muted-foreground"}`}
+                    >
+                      <CalendarIcon className="mr-2 h-4 w-4" />
+                      {formData.scheduled_date ? (
+                        format(new Date(formData.scheduled_date), "PPP")
+                      ) : (
+                        <span>Pick a date</span>
+                      )}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0">
+                    <Calendar
+                      mode="single"
+                      selected={formData.scheduled_date ? new Date(formData.scheduled_date) : undefined}
+                      onSelect={(date) =>
+                        setFormData({ ...formData, scheduled_date: date ? format(date, "yyyy-MM-dd") : "" })
+                      }
+                      initialFocus
+                    />
+                  </PopoverContent>
+                </Popover>
               </div>
             </div>
 

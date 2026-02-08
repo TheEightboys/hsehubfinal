@@ -1,7 +1,14 @@
 import { useEffect, useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, Plus, Search } from "lucide-react";
+import { ArrowLeft, Plus, Search, Calendar as CalendarIcon } from "lucide-react";
+import { format } from "date-fns";
+import { Calendar } from "@/components/ui/calendar";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -306,7 +313,29 @@ export default function Tasks() {
                             <FormItem>
                               <FormLabel>Due Date</FormLabel>
                               <FormControl>
-                                <Input type="date" {...field} />
+                                <Popover>
+                                  <PopoverTrigger asChild>
+                                    <Button
+                                      variant="outline"
+                                      className={`w-full justify-start text-left font-normal ${!field.value && "text-muted-foreground"}`}
+                                    >
+                                      <CalendarIcon className="mr-2 h-4 w-4" />
+                                      {field.value ? (
+                                        format(new Date(field.value), "PPP")
+                                      ) : (
+                                        <span>Pick a date</span>
+                                      )}
+                                    </Button>
+                                  </PopoverTrigger>
+                                  <PopoverContent className="w-auto p-0">
+                                    <Calendar
+                                      mode="single"
+                                      selected={field.value ? new Date(field.value) : undefined}
+                                      onSelect={(date) => field.onChange(date ? format(date, "yyyy-MM-dd") : "")}
+                                      initialFocus
+                                    />
+                                  </PopoverContent>
+                                </Popover>
                               </FormControl>
                               <FormMessage />
                             </FormItem>

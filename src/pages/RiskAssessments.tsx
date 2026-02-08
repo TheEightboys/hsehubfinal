@@ -17,7 +17,15 @@ import {
   Grid3x3,
   FileDown,
   Trash2,
+  CalendarIcon,
 } from "lucide-react";
+import { format } from "date-fns";
+import { Calendar } from "@/components/ui/calendar";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -59,6 +67,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Progress } from "@/components/ui/progress";
 import html2canvas from "html2canvas";
 import jsPDF from "jspdf";
+import autoTable from "jspdf-autotable";
 
 
 // Types
@@ -295,10 +304,10 @@ export default function RiskAssessments() {
           .eq("company_id", companyId)
           .order("name"),
         supabase
-          .from("employees")
-          .select("*")
+          .from("team_members")
+          .select("id, first_name, last_name, email, role")
           .eq("company_id", companyId)
-          .order("full_name"),
+          .order("first_name"),
       ]);
 
       if (risksRes.error) throw risksRes.error;
@@ -327,10 +336,10 @@ export default function RiskAssessments() {
       setDepartments(departmentsRes.data || []);
       setExposureGroups(exposureGroupsRes.data || []);
 
-      // Map employees to correct format
+      // Map team members to employee format
       setEmployees((employeesRes.data || []).map((emp: any) => ({
         id: emp.id,
-        full_name: `${emp.full_name} ${emp.email ? `(${emp.email})` : ''}`,
+        full_name: `${emp.first_name} ${emp.last_name} (${emp.role || 'No Role'})`,
       })));
     } catch (err: unknown) {
       const e = err as { message?: string } | Error | null;
@@ -343,6 +352,71 @@ export default function RiskAssessments() {
       });
     } finally {
       setLoadingData(false);
+    }
+  };
+
+  const handleExportPDF = () => {
+    try {
+      const doc = new jsPDF();
+
+      // Add Metadata
+      const title = language === "de" ? "Risikobewertungsbericht" : "Risk Assessment Report";
+      const timestamp = new Date().toLocaleString();
+
+      // Title
+      doc.setFontSize(18);
+      doc.text(title, 14, 22);
+
+      doc.setFontSize(10);
+      doc.setTextColor(100);
+      doc.text(`${t("common.generatedOn") || "Generated on"}: ${timestamp}`, 14, 30);
+
+      // Define columns
+      const tableColumn = [
+        "Title",
+        "Department",
+        "Location",
+        "Hazard",
+        "Risk Level",
+        "Status",
+        "Date"
+      ];
+
+      // Define rows
+      const tableRows = filteredRisks.map(risk => [
+        risk.title,
+        risk.departments?.name || "-",
+        risk.locations?.name || "-",
+        risk.hazard_category || "-",
+        risk.risk_level?.toUpperCase() || "-",
+        risk.status || "-",
+        risk.assessment_date || "-"
+      ]);
+
+      // Generate table
+      autoTable(doc, {
+        head: [tableColumn],
+        body: tableRows,
+        startY: 35,
+        styles: { fontSize: 8 },
+        headStyles: { fillColor: [41, 128, 185], textColor: 255 },
+        alternateRowStyles: { fillColor: [245, 245, 245] },
+      });
+
+      // Save the PDF
+      doc.save("Risk_Assessments.pdf");
+
+      toast({
+        title: "Success",
+        description: "PDF exported successfully",
+      });
+    } catch (error) {
+      console.error("PDF Export Error:", error);
+      toast({
+        title: "Error",
+        description: "Failed to export PDF",
+        variant: "destructive",
+      });
     }
   };
 
@@ -614,16 +688,7 @@ export default function RiskAssessments() {
               <div className="flex gap-2 flex-wrap">
                 <Button
                   className="whitespace-nowrap"
-                  onClick={() => {
-                    toast({
-                      title:
-                        language === "de" ? "PDF exportieren" : "Export PDF",
-                      description:
-                        language === "de"
-                          ? "PDF-Export-Funktion kommt bald"
-                          : "PDF export functionality coming soon",
-                    });
-                  }}
+                  onClick={handleExportPDF}
                 >
                   <FileDown className="w-4 h-4 mr-2" />
                   {language === "de" ? "PDF Export" : "Export PDF"}
@@ -709,18 +774,34 @@ export default function RiskAssessments() {
                               <Label htmlFor="assessment_date">
                                 {t("risks.assessmentDate")} *
                               </Label>
-                              <Input
-                                id="assessment_date"
-                                type="date"
-                                value={formData.assessment_date}
-                                onChange={(e) =>
-                                  setFormData({
-                                    ...formData,
-                                    assessment_date: e.target.value,
-                                  })
-                                }
-                                required
-                              />
+                              <Popover>
+                                <PopoverTrigger asChild>
+                                  <Button
+                                    variant="outline"
+                                    className={`w-full justify-start text-left font-normal ${!formData.assessment_date && "text-muted-foreground"}`}
+                                  >
+                                    <CalendarIcon className="mr-2 h-4 w-4" />
+                                    {formData.assessment_date ? (
+                                      format(new Date(formData.assessment_date), "PPP")
+                                    ) : (
+                                      <span>Pick a date</span>
+                                    )}
+                                  </Button>
+                                </PopoverTrigger>
+                                <PopoverContent className="w-auto p-0">
+                                  <Calendar
+                                    mode="single"
+                                    selected={formData.assessment_date ? new Date(formData.assessment_date) : undefined}
+                                    onSelect={(date) =>
+                                      setFormData({
+                                        ...formData,
+                                        assessment_date: date ? format(date, "yyyy-MM-dd") : "",
+                                      })
+                                    }
+                                    initialFocus
+                                  />
+                                </PopoverContent>
+                              </Popover>
                             </div>
                           </div>
 
@@ -1202,17 +1283,34 @@ export default function RiskAssessments() {
                               <Label htmlFor="assessment_date">
                                 {t("risks.dueDate")}
                               </Label>
-                              <Input
-                                id="assessment_date"
-                                type="date"
-                                value={formData.assessment_date}
-                                onChange={(e) =>
-                                  setFormData({
-                                    ...formData,
-                                    assessment_date: e.target.value,
-                                  })
-                                }
-                              />
+                              <Popover>
+                                <PopoverTrigger asChild>
+                                  <Button
+                                    variant="outline"
+                                    className={`w-full justify-start text-left font-normal ${!formData.assessment_date && "text-muted-foreground"}`}
+                                  >
+                                    <CalendarIcon className="mr-2 h-4 w-4" />
+                                    {formData.assessment_date ? (
+                                      format(new Date(formData.assessment_date), "PPP")
+                                    ) : (
+                                      <span>Pick a date</span>
+                                    )}
+                                  </Button>
+                                </PopoverTrigger>
+                                <PopoverContent className="w-auto p-0">
+                                  <Calendar
+                                    mode="single"
+                                    selected={formData.assessment_date ? new Date(formData.assessment_date) : undefined}
+                                    onSelect={(date) =>
+                                      setFormData({
+                                        ...formData,
+                                        assessment_date: date ? format(date, "yyyy-MM-dd") : "",
+                                      })
+                                    }
+                                    initialFocus
+                                  />
+                                </PopoverContent>
+                              </Popover>
                             </div>
                           </div>
 
@@ -1368,16 +1466,33 @@ export default function RiskAssessments() {
 
                                   <div className="space-y-2">
                                     <Label>Due Date</Label>
-                                    <Input
-                                      type="date"
-                                      value={measure.due_date}
-                                      onChange={(e) => {
-                                        const updated = [...measures];
-                                        updated[index].due_date =
-                                          e.target.value;
-                                        setMeasures(updated);
-                                      }}
-                                    />
+                                    <Popover>
+                                      <PopoverTrigger asChild>
+                                        <Button
+                                          variant="outline"
+                                          className={`w-full justify-start text-left font-normal ${!measure.due_date && "text-muted-foreground"}`}
+                                        >
+                                          <CalendarIcon className="mr-2 h-4 w-4" />
+                                          {measure.due_date ? (
+                                            format(new Date(measure.due_date), "PPP")
+                                          ) : (
+                                            <span>Pick a date</span>
+                                          )}
+                                        </Button>
+                                      </PopoverTrigger>
+                                      <PopoverContent className="w-auto p-0">
+                                        <Calendar
+                                          mode="single"
+                                          selected={measure.due_date ? new Date(measure.due_date) : undefined}
+                                          onSelect={(date) => {
+                                            const updated = [...measures];
+                                            updated[index].due_date = date ? format(date, "yyyy-MM-dd") : "";
+                                            setMeasures(updated);
+                                          }}
+                                          initialFocus
+                                        />
+                                      </PopoverContent>
+                                    </Popover>
                                   </div>
 
                                   <div className="space-y-2">
