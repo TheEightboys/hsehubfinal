@@ -391,17 +391,17 @@ const Index = () => {
       >
         <div className="text-center mb-16 space-y-4">
           <Badge className="bg-blue-100 text-blue-700 border-blue-200">
-            Powerful Features
+            Leistungsstarke Funktionen
           </Badge>
           <h2 className="text-4xl lg:text-5xl font-bold">
-            Everything You Need for{" "}
+            Ihr Komplettpaket für{" "}
             <span className="bg-gradient-to-r from-blue-600 to-green-600 bg-clip-text text-transparent">
-              Complete Safety
+              Sicherheit, Schulung und Compliance
             </span>
           </h2>
           <p className="text-xl text-gray-600 max-w-3xl mx-auto leading-relaxed">
-            Comprehensive tools for managing every aspect of your HSE operations
-            in one integrated platform
+            Umfassende Tools zur Verwaltung aller Aspekte Ihres HSE-Betriebs auf
+            einer integrierten Plattform
           </p>
         </div>
 
