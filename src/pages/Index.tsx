@@ -364,31 +364,6 @@ const Index = () => {
         </div>
       </section>
 
-      {/* Stats Section */}
-      <section className="container mx-auto px-4 py-12">
-        <Card className="border-2 shadow-xl">
-          <CardContent className="p-8">
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
-              {[
-                { number: "500+", label: "Organizations" },
-                { number: "50K+", label: "Employees Protected" },
-                { number: "99.9%", label: "Uptime" },
-                { number: "10M+", label: "Records Managed" },
-              ].map((stat, idx) => (
-                <div key={idx} className="text-center">
-                  <div className="text-4xl lg:text-5xl font-bold bg-gradient-to-r from-blue-600 to-green-600 bg-clip-text text-transparent mb-2">
-                    {stat.number}
-                  </div>
-                  <div className="text-sm lg:text-base text-gray-600 font-medium">
-                    {stat.label}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-      </section>
-
       {/* Benefits Section */}
       <section id="benefits" className="container mx-auto px-4 py-20">
         <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
