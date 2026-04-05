@@ -104,13 +104,6 @@ const Index = () => {
     },
   ];
 
-  const stats = [
-    { number: "500+", label: "Organizations", icon: Users },
-    { number: "50K+", label: "Employees Protected", icon: Users },
-    { number: "99.9%", label: "Uptime", icon: TrendingUp },
-    { number: "10M+", label: "Records Managed", icon: Database },
-  ];
-
   const testimonials = [
     {
       quote:
