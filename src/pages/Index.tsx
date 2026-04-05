@@ -290,21 +290,21 @@ const Index = () => {
           <div className="space-y-8">
             <Badge className="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-50 to-green-50 text-blue-700 border-blue-200 text-sm font-semibold">
               <Star className="h-4 w-4 fill-blue-600 text-blue-600" />
-              <span>Trusted by 500+ Safety-First Organizations</span>
+              <span>Ihr Partner für modernes HSE-Management</span>
             </Badge>
 
             <h1 className="text-5xl lg:text-7xl font-bold leading-tight">
-              Comprehensive{" "}
+              Weniger Risiken.{" "}
               <span className="bg-gradient-to-r from-blue-600 via-green-600 to-blue-600 bg-clip-text text-transparent animate-gradient">
-                Health, Safety & Environment
+                Mehr Kontrolle. Maximale
               </span>{" "}
-              Management
+              Sicherheit.
             </h1>
 
             <p className="text-xl lg:text-2xl text-gray-600 leading-relaxed">
-              Streamline your HSE operations with powerful tools for risk
-              assessments, audits, training management, and compliance tracking.
-              Built for modern safety-first organizations.
+              Optimieren Sie Ihr HSE-Management zentral an einem Ort: Führen Sie Risikobewertungen durch, planen
+              Sie Audits, verwalten Sie Schulungen und behalten Sie Compliance jederzeit im Blick. Arbeiten Sie
+              effizienter, minimieren Sie Vorfälle und sorgen Sie für ein sicheres, gut organisiertes Unternehmen.
             </p>
 
             <div className="flex flex-col sm:flex-row gap-4">
@@ -313,7 +313,7 @@ const Index = () => {
                 onClick={() => navigate("/register")}
                 className="bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-lg h-16 px-10 shadow-xl hover:shadow-2xl transition-all group"
               >
-                Start Free Trial
+                Testversion starten
                 <ArrowRight className="ml-2 h-5 w-5 group-hover:translate-x-1 transition-transform" />
               </Button>
               <Button
