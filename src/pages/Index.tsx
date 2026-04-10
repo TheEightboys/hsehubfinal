@@ -234,13 +234,13 @@ const Index = () => {
             </div>
             <div className="hidden md:flex items-center gap-8 text-sm font-medium">
               <a
-                href="#Funktionen"
+                href="#Features"
                 className="text-gray-700 hover:text-blue-600 transition-colors"
               >
                 Funktionen
               </a>
               <a
-                href="#Vorteile"
+                href="#benefits"
                 className="text-gray-700 hover:text-blue-600 transition-colors"
               >
                 Vorteile
@@ -252,7 +252,7 @@ const Index = () => {
                 Bewertungen
               </a>
               <a
-                href="#Bewertungen"
+                href="#Pricing"
                 className="text-gray-700 hover:text-blue-600 transition-colors"
               >
                 Preise
