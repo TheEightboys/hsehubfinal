@@ -496,16 +496,16 @@ const Index = () => {
       >
         <div className="text-center mb-16 space-y-4">
           <Badge className="bg-blue-100 text-blue-700 border-blue-200">
-            Simple Pricing
+            Transparente Preise
           </Badge>
           <h2 className="text-4xl lg:text-5xl font-bold">
-            One Plan,{" "}
+            Das richtige Paket für{" "}
             <span className="bg-gradient-to-r from-blue-600 to-green-600 bg-clip-text text-transparent">
-              All Features
+              jede Unternehmensgröße.
             </span>
           </h2>
           <p className="text-xl text-gray-600 max-w-2xl mx-auto">
-            No hidden fees. Cancel anytime. Scale as you grow.
+            Keine versteckten Kosten. Jederzeit kündbar.
           </p>
         </div>
 
