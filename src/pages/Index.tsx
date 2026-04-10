@@ -107,21 +107,21 @@ const Index = () => {
   const testimonials = [
     {
       quote:
-        "SafetyHub transformed our HSE operations. We've reduced incident response time by 60% and improved compliance tracking significantly.",
+        "Sehr intuitiv aufgebaut und schnell einsatzbereit. Für uns ist die Plattform Safe-Forward genau die richtige Lösung ohne unnötigen Overhead.",
       author: "Sarah Johnson",
       role: "HSE Manager",
       company: "Industrial Corp",
     },
     {
       quote:
-        "The intuitive interface and powerful automation features saved our team countless hours. Best investment we've made in workplace safety.",
+        "Endlich ein System, das unsere HSE-Prozesse wirklich übersichtlich macht. Besonders die klare Aufgabenverteilung hat uns enorm geholfen, Fristen einzuhalten.",
       author: "Michael Chen",
       role: "Safety Director",
       company: "Manufacturing Inc",
     },
     {
       quote:
-        "Real-time dashboards and comprehensive reporting make audits effortless. Our compliance rate improved from 85% to 98% in 6 months.",
+        "Seit der Einführung haben wir deutlich mehr Transparenz. Offene Aufgaben sind um über 60% gesunken und wir reagieren viel schneller auf Vorfälle.",
       author: "Emma Williams",
       role: "Operations Manager",
       company: "Energy Solutions",
