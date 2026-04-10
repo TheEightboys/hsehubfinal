@@ -30,7 +30,7 @@ import {
 const Index = () => {
   const navigate = useNavigate();
 
-  const Funktionen = [
+  const features = [
     {
       icon: Users,
       title: "Personalmanagement",
@@ -81,7 +81,7 @@ const Index = () => {
     },
   ];
 
-  const Vorteile = [
+  const benefits = [
     {
       icon: Zap,
       title: "Schneller Einstieg",
@@ -104,7 +104,7 @@ const Index = () => {
     },
   ];
 
-  const Bewertungen = [
+  const testimonials = [
     {
       quote:
         "SafetyHub transformed our HSE operations. We've reduced incident response time by 60% and improved compliance tracking significantly.",
@@ -128,7 +128,7 @@ const Index = () => {
     },
   ];
 
-  const Preise = [
+  const pricingPlans = [
     {
       name: "Package S",
       subtitle: "HSE Basic - The digital entry point",
