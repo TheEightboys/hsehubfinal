@@ -170,7 +170,7 @@ const Index = () => {
     },
     {
       name: "Paket L",
-      subtitle: "HSE Enterprise – Für große mittelständische Unternehmen und Konzerne",
+      subtitle: "HSE Enterprise – Für mittelständische Unternehmen und Konzerne",
       price: "149€",
       period: "Monat",
       description: "Alle fachlichen HSE-Funktionen auf Organisationsebene.",
@@ -193,17 +193,17 @@ const Index = () => {
   ];
 
   const allFeatures = [
-    { name: "User", basic: "5", pro: "10", enterprise: "unbegrenzt" },
+    { name: "Benutzer", basic: "5", pro: "10", enterprise: "unbegrenzt" },
     { name: "Dashboard", basic: true, pro: true, enterprise: true },
-    { name: "Employee management", basic: true, pro: true, enterprise: true },
-    { name: "Investigations", basic: true, pro: true, enterprise: true },
-    { name: "incidents", basic: false, pro: true, enterprise: true },
-    { name: "GBU", basic: false, pro: true, enterprise: true },
-    { name: "Measures", basic: false, pro: true, enterprise: true },
-    { name: "Training management", basic: false, pro: false, enterprise: true },
+    { name: "Mitarbeiterverwaltung", basic: true, pro: true, enterprise: true },
+    { name: "Untersuchungen", basic: true, pro: true, enterprise: true },
+    { name: "Vorfälle", basic: false, pro: true, enterprise: true },
+    { name: "Gefährdungsbeurteilung (GBU) ", basic: false, pro: true, enterprise: true },
+    { name: "Maßnahmen", basic: false, pro: true, enterprise: true },
+    { name: "Schulungsmanagement", basic: false, pro: false, enterprise: true },
     { name: "Audit-Management", basic: false, pro: false, enterprise: true },
     { name: "Partner-API", basic: false, pro: true, enterprise: true },
-    { name: "Priority Support", basic: false, pro: false, enterprise: true },
+    { name: "Prioritäts-Support", basic: false, pro: false, enterprise: true },
   ];
 
   return (
