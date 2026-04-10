@@ -324,7 +324,7 @@ const Index = () => {
               <span>Keine Kreditkarte erforderlich</span>
               <span className="text-gray-300">•</span>
               <Check className="h-5 w-5 text-green-600" />
-              <span>14-Tage teste</span>
+              <span>14-Tage testen</span>
               <span className="text-gray-300">•</span>
               <Check className="h-5 w-5 text-green-600" />
               <span>Jederzeit kündbar</span>
