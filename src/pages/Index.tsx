@@ -107,7 +107,7 @@ const Index = () => {
   const testimonials = [
     {
       quote:
-        "Sehr intuitiv aufgebaut und schnell einsatzbereit. Für uns ist die Plattform Safe-Forward genau die richtige Lösung ohne unnötigen Overhead.",
+        "Sehr intuitiv aufgebaut und schnell einsatzbereit. Für uns ist die Plattform Safe-Forward genau die richtige digitale Lösung ohne unnötigen Overhead.",
       author: "Sarah Johnson",
       role: "HSE Manager",
       company: "Industrial Corp",
