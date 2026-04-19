@@ -7,7 +7,6 @@ import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import {
   Download,
-  Filter,
   Plus,
   Shield,
   ClipboardCheck,
@@ -134,7 +133,6 @@ export default function Reports() {
   const [visibility, setVisibility] = useState("only-me");
   const [dateRange, setDateRange] = useState("last-30-days");
   const [showDatePicker, setShowDatePicker] = useState(false);
-  const [showFilterDialog, setShowFilterDialog] = useState(false);
   const [showAddReportDialog, setShowAddReportDialog] = useState(false);
 
   const [stats, setStats] = useState<ReportStats>({
@@ -256,11 +254,59 @@ export default function Reports() {
 
   useEffect(() => {
     if (companyId) {
-      fetchReportData();
-      fetchChartData();
       loadCustomReports();
     }
   }, [companyId]);
+
+  useEffect(() => {
+    if (companyId) {
+      fetchReportData();
+      fetchChartData();
+    }
+  }, [companyId, dateRange]);
+
+  const getDateRangeBounds = useCallback((range: string) => {
+    const endDate = new Date();
+    const startDate = new Date(endDate);
+
+    switch (range) {
+      case "last-7-days":
+        startDate.setDate(endDate.getDate() - 6);
+        break;
+      case "last-30-days":
+        startDate.setDate(endDate.getDate() - 29);
+        break;
+      case "last-90-days":
+        startDate.setDate(endDate.getDate() - 89);
+        break;
+      case "this-month":
+        startDate.setDate(1);
+        break;
+      case "last-month": {
+        const lastMonth = new Date(endDate.getFullYear(), endDate.getMonth() - 1, 1);
+        const lastMonthEnd = new Date(endDate.getFullYear(), endDate.getMonth(), 0, 23, 59, 59, 999);
+        return {
+          startDate: lastMonth,
+          endDate: lastMonthEnd,
+          startIso: lastMonth.toISOString(),
+          endIso: lastMonthEnd.toISOString(),
+        };
+      }
+      case "this-year":
+        startDate.setMonth(0, 1);
+        startDate.setHours(0, 0, 0, 0);
+        break;
+      default:
+        startDate.setDate(endDate.getDate() - 29);
+    }
+
+    return {
+      startDate,
+      endDate,
+      startIso: startDate.toISOString(),
+      endIso: endDate.toISOString(),
+    };
+  }, []);
 
   // Load custom reports from localStorage
   const loadCustomReports = async () => {
@@ -299,6 +345,37 @@ export default function Reports() {
     }
   };
 
+  useEffect(() => {
+    if (!companyId || customReports.length === 0) return;
+
+    const refreshCustomReports = async () => {
+      try {
+        const { startIso, endIso } = getDateRangeBounds(dateRange);
+        const refreshedReports = await Promise.all(
+          customReports.map(async (report) => {
+            const data = await fetchTemplateData({
+              ...report,
+              dateRange: {
+                type: "custom",
+                startDate: startIso,
+                endDate: endIso,
+              },
+            });
+            return { ...report, data };
+          })
+        );
+
+        setCustomReports(refreshedReports);
+        localStorage.setItem("hse_custom_reports", JSON.stringify(refreshedReports));
+      } catch (error) {
+        console.error("Error refreshing custom reports for date range:", error);
+      }
+    };
+
+    refreshCustomReports();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [companyId, dateRange, getDateRangeBounds]);
+
   // Save custom reports to localStorage
   const saveCustomReports = async (reports: ReportConfig[]) => {
     try {
@@ -328,6 +405,10 @@ export default function Reports() {
     if (!companyId) return;
 
     try {
+      const { startIso, endIso } = getDateRangeBounds(dateRange);
+      const inRange = (query: any, column: string) =>
+        query.gte(column, startIso).lte(column, endIso);
+
       // Fetch counts from all HSE modules:
       // - Measures: Corrective/preventive actions from risks, audits, and incidents
       // - Audits: Compliance checks and inspections (ISO standards)
@@ -352,68 +433,103 @@ export default function Reports() {
         supabase
           .from("employees")
           .select("id", { count: "exact", head: true })
-          .eq("company_id", companyId),
+          .eq("company_id", companyId)
+          .gte("created_at", startIso)
+          .lte("created_at", endIso),
         supabase
           .from("risk_assessments")
           .select("id", { count: "exact", head: true })
-          .eq("company_id", companyId),
+          .eq("company_id", companyId)
+          .gte("assessment_date", startIso)
+          .lte("assessment_date", endIso),
         supabase
           .from("audits")
           .select("id", { count: "exact", head: true })
-          .eq("company_id", companyId),
+          .eq("company_id", companyId)
+          .gte("created_at", startIso)
+          .lte("created_at", endIso),
         supabase
           .from("tasks")
           .select("id", { count: "exact", head: true })
-          .eq("company_id", companyId),
+          .eq("company_id", companyId)
+          .gte("created_at", startIso)
+          .lte("created_at", endIso),
         supabase
           .from("incidents" as any)
           .select("id", { count: "exact", head: true })
-          .eq("company_id", companyId),
+          .eq("company_id", companyId)
+          .gte("incident_date", startIso)
+          .lte("incident_date", endIso),
         supabase
           .from("measures" as any)
           .select("id", { count: "exact", head: true })
-          .eq("company_id", companyId),
+          .eq("company_id", companyId)
+          .gte("created_at", startIso)
+          .lte("created_at", endIso),
         supabase
           .from("risk_assessment_measures")
           .select("id", { count: "exact", head: true })
-          .eq("company_id", companyId),
+          .eq("company_id", companyId)
+          .gte("created_at", startIso)
+          .lte("created_at", endIso),
         supabase
           .from("courses")
           .select("id", { count: "exact", head: true })
-          .eq("company_id", companyId),
+          .eq("company_id", companyId)
+          .gte("created_at", startIso)
+          .lte("created_at", endIso),
         supabase
           .from("health_checkups")
           .select("id", { count: "exact", head: true })
-          .eq("company_id", companyId),
-        supabase
-          .from("audits")
-          .select("id", { count: "exact", head: true })
           .eq("company_id", companyId)
-          .eq("status", "completed"),
-        supabase
-          .from("tasks")
-          .select("id", { count: "exact", head: true })
-          .eq("company_id", companyId)
-          .eq("status", "completed"),
-        supabase
-          .from("measures" as any)
-          .select("id", { count: "exact", head: true })
-          .eq("company_id", companyId)
-          .eq("status", "completed"),
-        supabase
-          .from("risk_assessment_measures")
-          .select("id", { count: "exact", head: true })
-          .eq("company_id", companyId)
-          .eq("progress_status", "completed"),
-        supabase
-          .from("incidents" as any)
-          .select("id", { count: "exact", head: true })
-          .eq("company_id", companyId)
-          .eq("investigation_status", "open"),
+          .gte("created_at", startIso)
+          .lte("created_at", endIso),
+        inRange(
+          supabase
+            .from("audits")
+            .select("id", { count: "exact", head: true })
+            .eq("company_id", companyId)
+            .eq("status", "completed"),
+          "created_at"
+        ),
+        inRange(
+          supabase
+            .from("tasks")
+            .select("id", { count: "exact", head: true })
+            .eq("company_id", companyId)
+            .eq("status", "completed"),
+          "created_at"
+        ),
+        inRange(
+          supabase
+            .from("measures" as any)
+            .select("id", { count: "exact", head: true })
+            .eq("company_id", companyId)
+            .eq("status", "completed"),
+          "created_at"
+        ),
+        inRange(
+          supabase
+            .from("risk_assessment_measures")
+            .select("id", { count: "exact", head: true })
+            .eq("company_id", companyId)
+            .eq("progress_status", "completed"),
+          "created_at"
+        ),
+        inRange(
+          supabase
+            .from("incidents" as any)
+            .select("id", { count: "exact", head: true })
+            .eq("company_id", companyId)
+            .eq("investigation_status", "open"),
+          "incident_date"
+        ),
         supabase
           .from("training_records")
           .select("*")
-          .eq("company_id", companyId),
+          .eq("company_id", companyId)
+          .gte("created_at", startIso)
+          .lte("created_at", endIso),
       ]);
 
       const totalTraining = trainingRes.data?.length || 0;
@@ -440,7 +556,7 @@ export default function Reports() {
         trainingCompliance: trainingComplianceRate,
       });
 
-      await fetchTrainingMatrix();
+      await fetchTrainingMatrix(startIso, endIso);
     } catch (error: any) {
       console.error("Error fetching report data:", error);
       toast({
@@ -451,7 +567,7 @@ export default function Reports() {
     }
   };
 
-  const fetchTrainingMatrix = async () => {
+  const fetchTrainingMatrix = async (startIso: string, endIso: string) => {
     if (!companyId) return;
 
     try {
@@ -469,7 +585,9 @@ export default function Reports() {
         const { data: trainings, error: trainError } = await supabase
           .from("training_records")
           .select("*")
-          .eq("employee_id", emp.id);
+          .eq("employee_id", emp.id)
+          .gte("created_at", startIso)
+          .lte("created_at", endIso);
 
         if (trainError) throw trainError;
 
@@ -500,52 +618,82 @@ export default function Reports() {
     if (!companyId) return;
 
     try {
-      // Calculate date range for last 6 months from current date
-      const endDate = new Date();
-      const startDate = new Date();
-      startDate.setMonth(startDate.getMonth() - 6);
-      startDate.setDate(1); // Start from first day of month
+      const { startDate, endDate } = getDateRangeBounds(dateRange);
+      const msPerDay = 24 * 60 * 60 * 1000;
+      const totalDays = Math.max(
+        1,
+        Math.ceil((endDate.getTime() - startDate.getTime()) / msPerDay)
+      );
 
-      // Generate array of last 6 months
-      const months: { label: string; startDate: Date; endDate: Date }[] = [];
-      for (let i = 5; i >= 0; i--) {
-        const monthDate = new Date();
-        monthDate.setMonth(monthDate.getMonth() - i);
-        const monthStart = new Date(monthDate.getFullYear(), monthDate.getMonth(), 1);
-        const monthEnd = new Date(monthDate.getFullYear(), monthDate.getMonth() + 1, 0, 23, 59, 59);
-        
-        months.push({
-          label: monthStart.toLocaleDateString('en-US', { month: 'short' }),
-          startDate: monthStart,
-          endDate: monthEnd,
-        });
+      const buckets: { label: string; startDate: Date; endDate: Date }[] = [];
+      const useDailyBuckets = totalDays <= 45;
+
+      if (useDailyBuckets) {
+        const cursor = new Date(startDate);
+        cursor.setHours(0, 0, 0, 0);
+
+        while (cursor <= endDate) {
+          const bucketStart = new Date(cursor);
+          const bucketEnd = new Date(cursor);
+          bucketEnd.setHours(23, 59, 59, 999);
+          buckets.push({
+            label: bucketStart.toLocaleDateString("en-US", {
+              month: "short",
+              day: "numeric",
+            }),
+            startDate: bucketStart,
+            endDate: bucketEnd,
+          });
+          cursor.setDate(cursor.getDate() + 1);
+        }
+      } else {
+        const cursor = new Date(startDate.getFullYear(), startDate.getMonth(), 1);
+        const endMonth = new Date(endDate.getFullYear(), endDate.getMonth(), 1);
+
+        while (cursor <= endMonth) {
+          const monthStart = new Date(cursor.getFullYear(), cursor.getMonth(), 1);
+          const monthEnd = new Date(
+            cursor.getFullYear(),
+            cursor.getMonth() + 1,
+            0,
+            23,
+            59,
+            59,
+            999
+          );
+          buckets.push({
+            label: monthStart.toLocaleDateString("en-US", { month: "short" }),
+            startDate: monthStart,
+            endDate: monthEnd,
+          });
+          cursor.setMonth(cursor.getMonth() + 1);
+        }
       }
 
-      // Fetch incidents, trainings, and tasks for each month
-      const chartDataPromises = months.map(async (month) => {
+      const chartDataPromises = buckets.map(async (bucket) => {
         const [incidentsRes, trainingsRes, tasksRes] = await Promise.all([
           supabase
             .from("incidents")
             .select("id", { count: "exact", head: true })
             .eq("company_id", companyId)
-            .gte("incident_date", month.startDate.toISOString())
-            .lte("incident_date", month.endDate.toISOString()),
+            .gte("incident_date", bucket.startDate.toISOString())
+            .lte("incident_date", bucket.endDate.toISOString()),
           supabase
             .from("training_records")
             .select("id", { count: "exact", head: true })
             .eq("company_id", companyId)
-            .gte("created_at", month.startDate.toISOString())
-            .lte("created_at", month.endDate.toISOString()),
+            .gte("created_at", bucket.startDate.toISOString())
+            .lte("created_at", bucket.endDate.toISOString()),
           supabase
             .from("tasks")
             .select("id", { count: "exact", head: true })
             .eq("company_id", companyId)
-            .gte("created_at", month.startDate.toISOString())
-            .lte("created_at", month.endDate.toISOString()),
+            .gte("created_at", bucket.startDate.toISOString())
+            .lte("created_at", bucket.endDate.toISOString()),
         ]);
 
         return {
-          month: month.label,
+          month: bucket.label,
           incidents: incidentsRes.count || 0,
           trainings: trainingsRes.count || 0,
           tasks: tasksRes.count || 0,
@@ -859,6 +1007,11 @@ export default function Reports() {
     let startDate = new Date();
 
     switch (range?.type) {
+      case "custom":
+        return {
+          startDate: range?.startDate || startDate.toISOString(),
+          endDate: range?.endDate || endDate.toISOString(),
+        };
       case "last_7_days":
         startDate.setDate(endDate.getDate() - 7);
         break;
@@ -890,6 +1043,8 @@ export default function Reports() {
 
     const { metric, groupBy, dateRange } = template;
     const { startDate, endDate } = calculateDateRange(dateRange);
+    const applyRange = (query: any, column: string) =>
+      query.gte(column, startDate).lte(column, endDate);
 
     try {
       // Special handling for employees with department/location joins
@@ -898,7 +1053,9 @@ export default function Reports() {
           const { data, error } = await supabase
             .from("employees")
             .select("department_id, departments(name)")
-            .eq("company_id", companyId);
+            .eq("company_id", companyId)
+            .gte("created_at", startDate)
+            .lte("created_at", endDate);
 
           if (error) {
             console.error("Error fetching employee data:", error);
@@ -949,7 +1106,9 @@ export default function Reports() {
           const { data, error } = await supabase
             .from("risk_assessments")
             .select("department_id, departments(name)")
-            .eq("company_id", companyId);
+            .eq("company_id", companyId)
+            .gte("assessment_date", startDate)
+            .lte("assessment_date", endDate);
 
           if (error) {
             console.error("Error fetching risks by department:", error);
@@ -967,7 +1126,9 @@ export default function Reports() {
           const { data, error } = await supabase
             .from("risk_assessments")
             .select(column)
-            .eq("company_id", companyId);
+            .eq("company_id", companyId)
+            .gte("assessment_date", startDate)
+            .lte("assessment_date", endDate);
 
           if (error) {
             console.error("Error fetching risks:", error);
@@ -999,6 +1160,8 @@ export default function Reports() {
                 )
               `)
               .eq("company_id", companyId)
+              .gte("created_at", startDate)
+              .lte("created_at", endDate)
           );
           
           // Risk assessment measures table
@@ -1012,6 +1175,8 @@ export default function Reports() {
                 )
               `)
               .eq("company_id", companyId)
+              .gte("created_at", startDate)
+              .lte("created_at", endDate)
           );
 
           const [measuresRes, riskMeasuresRes] = await Promise.all(promises);
@@ -1053,7 +1218,9 @@ export default function Reports() {
             const { data, error } = await supabase
               .from("incidents")
               .select("location")
-              .eq("company_id", companyId);
+              .eq("company_id", companyId)
+              .gte("incident_date", startDate)
+              .lte("incident_date", endDate);
 
             if (error) return [];
             const grouped = (data || []).reduce((acc: Record<string, number>, item: any) => {
@@ -1079,7 +1246,9 @@ export default function Reports() {
           const { data, error } = await supabase
             .from("incidents")
             .select(incidentGroupCol)
-            .eq("company_id", companyId);
+            .eq("company_id", companyId)
+            .gte("incident_date", startDate)
+            .lte("incident_date", endDate);
 
           if (error) {
             console.error("Error fetching incidents:", error);
@@ -1113,7 +1282,9 @@ export default function Reports() {
               const { data, error } = await supabase
                 .from("training_records")
                 .select("employee_id, employees(full_name), status")
-                .eq("company_id", companyId);
+                .eq("company_id", companyId)
+                .gte("created_at", startDate)
+                .lte("created_at", endDate);
 
               if (error) {
                 console.error("Error fetching training by employee:", error);
@@ -1143,7 +1314,9 @@ export default function Reports() {
               const { data, error } = await supabase
                 .from("training_records")
                 .select("status")
-                .eq("company_id", companyId);
+                .eq("company_id", companyId)
+                .gte("created_at", startDate)
+                .lte("created_at", endDate);
 
               if (error) {
                 console.error("Error fetching training by status:", error);
@@ -1249,7 +1422,9 @@ export default function Reports() {
               const { data, error } = await supabase
                 .from("health_checkups")
                 .select("status")
-                .eq("company_id", companyId);
+                .eq("company_id", companyId)
+                .gte("created_at", startDate)
+                .lte("created_at", endDate);
 
               if (error) {
                 console.error("Error fetching health checkups data:", error);
@@ -1349,14 +1524,6 @@ export default function Reports() {
       console.error("Error in fetchTemplateData:", error);
       return [];
     }
-  };
-
-  const handleAddFilter = () => {
-    setShowFilterDialog(true);
-    toast({
-      title: "Add Filter",
-      description: "Filter functionality coming soon",
-    });
   };
 
   const handleAddReport = () => {
@@ -1605,6 +1772,33 @@ export default function Reports() {
     });
   };
 
+  const getMetricForSection = useCallback((sectionId: string) => {
+    switch (sectionId) {
+      case "risk-assessments":
+        return "risks";
+      case "audits":
+        return "audits";
+      case "incidents":
+        return "incidents";
+      case "trainings":
+        return "trainings";
+      case "measures":
+        return "measures";
+      case "tasks":
+        return "tasks";
+      case "checkups":
+        return "checkups";
+      default:
+        return null;
+    }
+  }, []);
+
+  const sectionCustomReports = useMemo(() => {
+    const metric = getMetricForSection(activeSection);
+    if (!metric) return [];
+    return customReports.filter((report) => report.metric === metric);
+  }, [activeSection, customReports, getMetricForSection]);
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -1663,11 +1857,6 @@ export default function Reports() {
                   <SelectItem value="this-year">This year</SelectItem>
                 </SelectContent>
               </Select>
-
-              <Button variant="outline" size="sm" onClick={handleAddFilter}>
-                <Filter className="w-4 h-4 mr-2" />
-                Add filter
-              </Button>
 
               <Select value={visibility} onValueChange={handleVisibilityChange}>
                 <SelectTrigger className="w-48">
@@ -1738,6 +1927,31 @@ export default function Reports() {
           )}
           {activeSection === "checkups" && (
             <CheckupsSection stats={stats} />
+          )}
+
+          {activeSection !== "overview" && sectionCustomReports.length > 0 && (
+            <div className="mt-8 space-y-4">
+              <div>
+                <h3 className="text-xl font-semibold">Custom Reports</h3>
+                <p className="text-sm text-muted-foreground">
+                  Reports matching this tab
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                {sectionCustomReports.map((report) => (
+                  <div key={`section-report-${report.id}`} className="min-h-[320px]">
+                    <ReportWidget
+                      config={report}
+                      onEdit={handleEditReport}
+                      onDuplicate={handleDuplicateReport}
+                      onDelete={handleDeleteReport}
+                      onExport={handleExportReport}
+                    />
+                  </div>
+                ))}
+              </div>
+            </div>
           )}
         </div>
       </main>
