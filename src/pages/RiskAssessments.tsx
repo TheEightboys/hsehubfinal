@@ -87,7 +87,7 @@ type Measure = {
 };
 
 // Constants
-const HAZARD_CATEGORIES = [
+const DEFAULT_HAZARD_CATEGORIES = [
   "Mechanical",
   "Electrical",
   "Chemical",
@@ -108,7 +108,7 @@ const RISK_MATRIX_LABELS = [
   "Catastrophic",
 ];
 
-const MEASURE_BUILDING_BLOCKS = [
+const DEFAULT_MEASURE_BUILDING_BLOCKS = [
   "Elimination",
   "Substitution",
   "Engineering Controls",
@@ -214,6 +214,12 @@ export default function RiskAssessments() {
   const [loadingData, setLoadingData] = useState(false);
   const [formStep, setFormStep] = useState(1);
   const [editableNotes, setEditableNotes] = useState("");
+  const [hazardCategories, setHazardCategories] = useState<string[]>(
+    DEFAULT_HAZARD_CATEGORIES
+  );
+  const [measureBuildingBlocks, setMeasureBuildingBlocks] = useState<string[]>(
+    DEFAULT_MEASURE_BUILDING_BLOCKS
+  );
 
   // Form state
   const [formData, setFormData] = useState({
@@ -269,6 +275,43 @@ export default function RiskAssessments() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, loading, navigate, companyId]);
 
+  useEffect(() => {
+    if (!companyId) return;
+
+    const channel = supabase
+      .channel(`risk-catalogs-${companyId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "risk_categories",
+          filter: `company_id=eq.${companyId}`,
+        },
+        () => fetchData(false)
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "measure_building_blocks",
+          filter: `company_id=eq.${companyId}`,
+        },
+        () => fetchData(false)
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [companyId]);
+
+  useEffect(() => {
+    setEditableNotes(selectedRisk?.notes || "");
+  }, [selectedRisk?.id]);
+
   const fetchData = async (showLoading = true) => {
     if (!companyId) return;
 
@@ -280,6 +323,8 @@ export default function RiskAssessments() {
         departmentsRes,
         exposureGroupsRes,
         employeesRes,
+        riskCategoriesRes,
+        measureBuildingBlocksRes,
       ] = await Promise.all([
         supabase
           .from("risk_assessments")
@@ -308,6 +353,16 @@ export default function RiskAssessments() {
           .select("id, first_name, last_name, email, role")
           .eq("company_id", companyId)
           .order("first_name"),
+        supabase
+          .from("risk_categories")
+          .select("name")
+          .eq("company_id", companyId)
+          .order("name"),
+        supabase
+          .from("measure_building_blocks")
+          .select("name")
+          .eq("company_id", companyId)
+          .order("name"),
       ]);
 
       if (risksRes.error) throw risksRes.error;
@@ -315,6 +370,8 @@ export default function RiskAssessments() {
       if (departmentsRes.error) throw departmentsRes.error;
       if (exposureGroupsRes.error) throw exposureGroupsRes.error;
       if (employeesRes.error) throw employeesRes.error;
+      if (riskCategoriesRes.error) throw riskCategoriesRes.error;
+      if (measureBuildingBlocksRes.error) throw measureBuildingBlocksRes.error;
 
       // Fetch measures for each risk assessment
       const risksWithMeasures = await Promise.all(
@@ -335,6 +392,27 @@ export default function RiskAssessments() {
       setLocations(locationsRes.data || []);
       setDepartments(departmentsRes.data || []);
       setExposureGroups(exposureGroupsRes.data || []);
+
+      const hazardCategoriesFromDb = (riskCategoriesRes.data || [])
+        .map((item) => item.name)
+        .filter(
+          (name): name is string =>
+            Boolean(name) && !["Low", "Medium", "High", "Very High"].includes(name)
+        );
+      const measureBuildingBlocksFromDb = (measureBuildingBlocksRes.data || [])
+        .map((item) => item.name)
+        .filter((name): name is string => Boolean(name));
+
+      setHazardCategories(
+        hazardCategoriesFromDb.length > 0
+          ? hazardCategoriesFromDb
+          : DEFAULT_HAZARD_CATEGORIES
+      );
+      setMeasureBuildingBlocks(
+        measureBuildingBlocksFromDb.length > 0
+          ? measureBuildingBlocksFromDb
+          : DEFAULT_MEASURE_BUILDING_BLOCKS
+      );
       
       // Map team members to employee format with role
       setEmployees((employeesRes.data || []).map((member: any) => ({
@@ -985,9 +1063,23 @@ export default function RiskAssessments() {
                           </h3>
 
                           <div className="space-y-2">
-                            <Label htmlFor="hazard_category">
-                              {t("risks.hazardCategory")}
-                            </Label>
+                            <div className="flex items-center justify-between">
+                              <Label htmlFor="hazard_category">
+                                {t("risks.hazardCategory")}
+                              </Label>
+                              <Button
+                                type="button"
+                                variant="link"
+                                className="h-auto p-0 text-xs"
+                                onClick={() =>
+                                  navigate(
+                                    "/settings?tab=catalogs&section=hazard-categories"
+                                  )
+                                }
+                              >
+                                Manage in Settings
+                              </Button>
+                            </div>
                             <Select
                               value={formData.hazard_category}
                               onValueChange={(val) =>
@@ -1003,7 +1095,7 @@ export default function RiskAssessments() {
                                 />
                               </SelectTrigger>
                               <SelectContent>
-                                {HAZARD_CATEGORIES.map((cat) => (
+                                {hazardCategories.map((cat) => (
                                   <SelectItem key={cat} value={cat}>
                                     {cat}
                                   </SelectItem>
@@ -1449,7 +1541,21 @@ export default function RiskAssessments() {
 
                                 <div className="grid grid-cols-2 gap-3">
                                   <div className="space-y-2">
-                                    <Label>Building Block</Label>
+                                    <div className="flex items-center justify-between">
+                                      <Label>Building Block</Label>
+                                      <Button
+                                        type="button"
+                                        variant="link"
+                                        className="h-auto p-0 text-xs"
+                                        onClick={() =>
+                                          navigate(
+                                            "/settings?tab=catalogs&section=measure-building-blocks"
+                                          )
+                                        }
+                                      >
+                                        Manage in Settings
+                                      </Button>
+                                    </div>
                                     <Select
                                       value={measure.measure_building_block}
                                       onValueChange={(val) => {
@@ -1463,7 +1569,7 @@ export default function RiskAssessments() {
                                         <SelectValue placeholder="Select building block" />
                                       </SelectTrigger>
                                       <SelectContent>
-                                        {MEASURE_BUILDING_BLOCKS.map(
+                                        {measureBuildingBlocks.map(
                                           (block) => (
                                             <SelectItem
                                               key={block}
@@ -1737,6 +1843,7 @@ export default function RiskAssessments() {
                             size="sm"
                             onClick={() => {
                               setSelectedRisk(risk);
+                              setEditableNotes(risk.notes || "");
                               setIsMatrixDialogOpen(true);
                             }}
                             className="h-8 w-8 p-0"
@@ -2216,7 +2323,7 @@ export default function RiskAssessments() {
                                   onChange={async (e) => {
                                     e.stopPropagation();
                                     if (!measure.id) return;
-                                    const newStatus = e.target.checked ? "completed" : "open";
+                                    const newStatus = e.target.checked ? "completed" : "not_started";
 
                                     // Optimistic update
                                     if (selectedRisk) {
@@ -2267,8 +2374,15 @@ export default function RiskAssessments() {
                             { status: "blocked", label: "blocked", bgColor: "bg-orange-500", textColor: "text-white", borderColor: "border-orange-600" },
                             { status: "completed", label: "completed", bgColor: "bg-green-500", textColor: "text-white", borderColor: "border-green-600" },
                           ].map(({ status, label, bgColor, textColor, borderColor }) => {
+                            // DB allows: not_started, in_progress, blocked, completed
+                            const dbStatus = status === "pending" ? "in_progress" : status;
                             // Check if any measure has this status
-                            const isActive = selectedRisk?.measures?.some((m) => m.progress_status === status);
+                            const isActive = selectedRisk?.measures?.some((m) => {
+                              if (status === "pending") {
+                                return m.progress_status === "pending" || m.progress_status === "in_progress";
+                              }
+                              return m.progress_status === status;
+                            });
                             const hasMeasures = selectedRisk?.measures && selectedRisk.measures.length > 0;
 
                             return (
@@ -2295,7 +2409,7 @@ export default function RiskAssessments() {
                                     if (selectedRisk) {
                                       const updatedMeasures = selectedRisk.measures?.map((m) =>
                                         m.id === measureToUpdate.id
-                                          ? { ...m, progress_status: status }
+                                          ? { ...m, progress_status: dbStatus }
                                           : m
                                       ) || [];
                                       setSelectedRisk({
@@ -2306,7 +2420,7 @@ export default function RiskAssessments() {
 
                                     const { error } = await supabase
                                       .from("risk_assessment_measures")
-                                      .update({ progress_status: status })
+                                      .update({ progress_status: dbStatus })
                                       .eq("id", measureToUpdate.id);
 
                                     if (error) {

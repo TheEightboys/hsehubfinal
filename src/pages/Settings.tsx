@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useLanguage } from "@/contexts/LanguageContext";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { useAuditLog } from "@/hooks/useAuditLog";
 import {
   ArrowLeft,
@@ -119,11 +119,38 @@ const baseSchema = z.object({
   description: z.string().optional(),
 });
 
+const PREDEFINED_HAZARD_CATEGORIES = [
+  "Mechanical",
+  "Electrical",
+  "Chemical",
+  "Biological",
+  "Ergonomic",
+  "Physical",
+  "Psychosocial",
+  "Fire/Explosion",
+  "Environmental",
+  "Other",
+];
+
+const PREDEFINED_MEASURE_BUILDING_BLOCKS = [
+  "Elimination",
+  "Substitution",
+  "Engineering Controls",
+  "Administrative Controls",
+  "Personal Protective Equipment (PPE)",
+  "Training",
+  "Supervision",
+  "Maintenance",
+  "Emergency Procedures",
+  "Other",
+];
+
 export default function Settings() {
   const { user, loading, companyId, userRole } = useAuth();
   const { t, language } = useLanguage();
   const { hasDetailedPermission } = usePermissions();
   const navigate = useNavigate();
+  const location = useLocation();
   const { toast } = useToast();
   const { logAction } = useAuditLog();
   const [loadingData, setLoadingData] = useState(false);
@@ -330,6 +357,28 @@ export default function Settings() {
     }
   }, [user, loading, navigate, companyId]);
 
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const tab = params.get("tab");
+    const section = params.get("section");
+
+    if (tab) {
+      setActiveTab(tab);
+    }
+
+    if (tab === "catalogs" && section) {
+      const scrollToSection = () => {
+        const target = document.getElementById(`settings-${section}`);
+        if (target) {
+          target.scrollIntoView({ behavior: "smooth", block: "start" });
+        }
+      };
+
+      // Wait for tab content to render before scrolling
+      setTimeout(scrollToSection, 120);
+    }
+  }, [location.search]);
+
   const fetchRecentInvoices = async () => {
     try {
       const { data, error } = await supabase
@@ -345,6 +394,104 @@ export default function Settings() {
       setRecentInvoices(data || []);
     } catch (err) {
       console.error("Error fetching recent invoices:", err);
+    }
+  };
+
+  const loadPredefinedHazardCategories = async () => {
+    if (!companyId) return;
+
+    try {
+      const existingNames = new Set(
+        (riskCategories || []).map((item: any) =>
+          String(item.name || "").trim().toLowerCase()
+        )
+      );
+
+      const missing = PREDEFINED_HAZARD_CATEGORIES.filter(
+        (name) => !existingNames.has(name.toLowerCase())
+      );
+
+      if (missing.length === 0) {
+        toast({
+          title: "Already up to date",
+          description: "All predefined hazard categories are already available.",
+        });
+        return;
+      }
+
+      const { error } = await supabase.from("risk_categories").insert(
+        missing.map((name) => ({
+          name,
+          company_id: companyId,
+          is_predefined: true,
+        }))
+      );
+
+      if (error) throw error;
+
+      toast({
+        title: "Success",
+        description: `${missing.length} predefined hazard categories added.`,
+      });
+      fetchAllData();
+    } catch (err: unknown) {
+      const e = err as { message?: string } | Error | null;
+      const message =
+        e && "message" in e && e.message ? e.message : String(err);
+      toast({
+        title: "Error",
+        description: message,
+        variant: "destructive",
+      });
+    }
+  };
+
+  const loadPredefinedMeasureBuildingBlocks = async () => {
+    if (!companyId) return;
+
+    try {
+      const existingNames = new Set(
+        (measureBuildingBlocks || []).map((item: any) =>
+          String(item.name || "").trim().toLowerCase()
+        )
+      );
+
+      const missing = PREDEFINED_MEASURE_BUILDING_BLOCKS.filter(
+        (name) => !existingNames.has(name.toLowerCase())
+      );
+
+      if (missing.length === 0) {
+        toast({
+          title: "Already up to date",
+          description:
+            "All predefined measure building blocks are already available.",
+        });
+        return;
+      }
+
+      const { error } = await supabase.from("measure_building_blocks").insert(
+        missing.map((name) => ({
+          name,
+          company_id: companyId,
+        }))
+      );
+
+      if (error) throw error;
+
+      toast({
+        title: "Success",
+        description: `${missing.length} predefined measure building blocks added.`,
+      });
+      fetchAllData();
+    } catch (err: unknown) {
+      const e = err as { message?: string } | Error | null;
+      const message =
+        e && "message" in e && e.message ? e.message : String(err);
+      toast({
+        title: "Error",
+        description: message,
+        variant: "destructive",
+      });
     }
   };
 
@@ -4139,9 +4286,18 @@ export default function Settings() {
               {/* Tab 4: Catalogs & Content */}
               <TabsContent value="catalogs">
                 <div className="space-y-6">
-                  <Card>
+                  <Card id="settings-hazard-categories">
                     <CardHeader>
-                      <CardTitle>{t("settings.hazardCategories")}</CardTitle>
+                      <div className="flex items-center justify-between gap-3">
+                        <CardTitle>{t("settings.hazardCategories")}</CardTitle>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={loadPredefinedHazardCategories}
+                        >
+                          Load Predefined Values
+                        </Button>
+                      </div>
                       <CardDescription>
                         {t("settings.hazardCategoriesDesc")}
                       </CardDescription>
@@ -4291,12 +4447,21 @@ export default function Settings() {
                   </Card>
 
                   {/* Measure Building Blocks - Inline Add */}
-                  <Card>
+                  <Card id="settings-measure-building-blocks">
                     <CardHeader>
-                      <CardTitle className="flex items-center gap-2">
-                        <Building2 className="w-5 h-5" />
-                        {t("settings.measureBuildingBlocks")}
-                      </CardTitle>
+                      <div className="flex items-center justify-between gap-3">
+                        <CardTitle className="flex items-center gap-2">
+                          <Building2 className="w-5 h-5" />
+                          {t("settings.measureBuildingBlocks")}
+                        </CardTitle>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={loadPredefinedMeasureBuildingBlocks}
+                        >
+                          Load Predefined Values
+                        </Button>
+                      </div>
                       <CardDescription>
                         {t("settings.measureBuildingBlocksDesc")}
                       </CardDescription>
