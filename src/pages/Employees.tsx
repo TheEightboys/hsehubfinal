@@ -147,6 +147,14 @@ export default function Employees() {
   const [isImporting, setIsImporting] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   const [importErrors, setImportErrors] = useState<string[]>([]);
+  const [lastImportReport, setLastImportReport] = useState<{
+    fileName: string;
+    totalRows: number;
+    importedCount: number;
+    skippedCount: number;
+    importedRows: string[];
+    skippedRows: string[];
+  } | null>(null);
   const [isImportGuideDialogOpen, setIsImportGuideDialogOpen] = useState(false);
 
   useEffect(() => {
@@ -805,6 +813,7 @@ export default function Employees() {
 
     setIsImporting(true);
     setImportErrors([]);
+    setLastImportReport(null);
     try {
       const data = await file.arrayBuffer();
       const workbook = XLSX.read(data);
@@ -822,6 +831,7 @@ export default function Employees() {
       let importedCount = 0;
       let skippedCount = 0;
       const rowErrors: string[] = [];
+      const importedRows: string[] = [];
 
       for (let index = 0; index < jsonData.length; index++) {
         const row = jsonData[index] as Record<string, unknown>;
@@ -953,11 +963,24 @@ export default function Employees() {
           skippedCount++;
         } else {
           importedCount++;
+          importedRows.push(
+            `Row ${rowNumber}: ${String(employeeNumber)} - ${String(
+              firstName
+            )} ${String(lastName)}`
+          );
           // Note: Audit logging removed for bulk imports since we don't have the employee ID
         }
       }
 
       setImportErrors(rowErrors);
+      setLastImportReport({
+        fileName: file.name,
+        totalRows: jsonData.length,
+        importedCount,
+        skippedCount,
+        importedRows,
+        skippedRows: rowErrors,
+      });
 
       if (importedCount === 0 && skippedCount > 0) {
         toast.error(`${t("employees.importError")}: all ${skippedCount} rows skipped`);
@@ -1678,6 +1701,43 @@ export default function Employees() {
                       {issue}
                     </p>
                   ))}
+                </div>
+              </div>
+            )}
+
+            {lastImportReport && lastImportReport.skippedCount > 0 && (
+              <div className="mb-4 p-4 rounded-xl border border-amber-300 bg-amber-50 text-sm space-y-3">
+                <p className="font-medium text-amber-900">
+                  Import report for {lastImportReport.fileName}
+                </p>
+                <p className="text-amber-900">
+                  Total rows: {lastImportReport.totalRows} | Imported: {lastImportReport.importedCount} | Skipped: {lastImportReport.skippedCount}
+                </p>
+
+                <div className="space-y-1">
+                  <p className="font-medium text-amber-900">Imported rows</p>
+                  <div className="max-h-32 overflow-auto space-y-1 pr-1">
+                    {lastImportReport.importedRows.length === 0 ? (
+                      <p className="text-muted-foreground">No rows imported.</p>
+                    ) : (
+                      lastImportReport.importedRows.map((item, idx) => (
+                        <p key={idx} className="text-muted-foreground">
+                          {item}
+                        </p>
+                      ))
+                    )}
+                  </div>
+                </div>
+
+                <div className="space-y-1">
+                  <p className="font-medium text-amber-900">Skipped rows</p>
+                  <div className="max-h-40 overflow-auto space-y-1 pr-1">
+                    {lastImportReport.skippedRows.map((item, idx) => (
+                      <p key={idx} className="text-muted-foreground">
+                        {item}
+                      </p>
+                    ))}
+                  </div>
                 </div>
               </div>
             )}
