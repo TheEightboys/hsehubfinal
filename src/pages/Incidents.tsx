@@ -14,6 +14,8 @@ import {
   Eye,
   Filter,
   Calendar as CalendarIcon,
+  ArrowUp,
+  ArrowDown,
 } from "lucide-react";
 import { Calendar } from "@/components/ui/calendar";
 import {
@@ -97,6 +99,13 @@ interface Department {
   name: string;
 }
 
+type IncidentSortKey =
+  | "title"
+  | "incident_type"
+  | "severity"
+  | "incident_date"
+  | "investigation_status";
+
 export default function Incidents() {
   const { user, companyId, loading } = useAuth();
   const { t } = useLanguage();
@@ -110,8 +119,12 @@ export default function Incidents() {
   const [searchTerm, setSearchTerm] = useState("");
   const [filterType, setFilterType] = useState<string>("all");
   const [filterSeverity, setFilterSeverity] = useState<string>("all");
+  const [filterStatus, setFilterStatus] = useState<string>("all");
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [viewingIncident, setViewingIncident] = useState<Incident | null>(null);
   const [editingIncident, setEditingIncident] = useState<Incident | null>(null);
+  const [sortKey, setSortKey] = useState<IncidentSortKey>("incident_date");
+  const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc");
 
   const [formData, setFormData] = useState({
     title: "",
@@ -420,7 +433,7 @@ export default function Incidents() {
     setEditingIncident(null);
   };
 
-  const getSeverityBadge = (severity: string) => {
+  const getSeverityBadge = (severity: string, clickable = false) => {
     const config: Record<string, { className: string; icon: any }> = {
       minor: { className: "bg-blue-100 text-blue-800", icon: AlertCircle },
       moderate: {
@@ -436,14 +449,18 @@ export default function Incidents() {
     };
     const { className, icon: Icon } = config[severity] || config.minor;
     return (
-      <Badge className={className}>
+      <Badge
+        className={`${className} ${clickable ? "cursor-pointer hover:opacity-80" : ""}`}
+        onClick={clickable ? () => setFilterSeverity((prev) => (prev === severity ? "all" : severity)) : undefined}
+        title={clickable ? "Click to filter by this severity" : undefined}
+      >
         <Icon className="w-3 h-3 mr-1" />
         {severity.charAt(0).toUpperCase() + severity.slice(1)}
       </Badge>
     );
   };
 
-  const getTypeBadge = (type: string) => {
+  const getTypeBadge = (type: string, clickable = false) => {
     const colors: Record<string, string> = {
       injury: "bg-red-100 text-red-800",
       near_miss: "bg-yellow-100 text-yellow-800",
@@ -452,9 +469,31 @@ export default function Incidents() {
       other: "bg-gray-100 text-gray-800",
     };
     return (
-      <Badge className={colors[type] || colors.other}>
+      <Badge
+        className={`${colors[type] || colors.other} ${clickable ? "cursor-pointer hover:opacity-80" : ""}`}
+        onClick={clickable ? () => setFilterType((prev) => (prev === type ? "all" : type)) : undefined}
+        title={clickable ? "Click to filter by this type" : undefined}
+      >
         {type.replace("_", " ").charAt(0).toUpperCase() +
           type.replace("_", " ").slice(1)}
+      </Badge>
+    );
+  };
+
+  const getStatusBadge = (status: string, clickable = false) => {
+    const isClosed = status === "closed";
+    return (
+      <Badge
+        variant={isClosed ? "outline" : "default"}
+        className={clickable ? "cursor-pointer hover:opacity-80" : ""}
+        onClick={
+          clickable
+            ? () => setFilterStatus((prev) => (prev === status ? "all" : status))
+            : undefined
+        }
+        title={clickable ? "Click to filter by this status" : undefined}
+      >
+        {status}
       </Badge>
     );
   };
@@ -466,8 +505,72 @@ export default function Incidents() {
       filterType === "all" || incident.incident_type === filterType;
     const matchesSeverity =
       filterSeverity === "all" || incident.severity === filterSeverity;
-    return matchesSearch && matchesType && matchesSeverity;
+    const matchesStatus =
+      filterStatus === "all" || incident.investigation_status === filterStatus;
+    return matchesSearch && matchesType && matchesSeverity && matchesStatus;
   });
+
+  const handleSort = (key: IncidentSortKey) => {
+    if (sortKey === key) {
+      setSortDirection((prev) => (prev === "asc" ? "desc" : "asc"));
+    } else {
+      setSortKey(key);
+      setSortDirection("asc");
+    }
+  };
+
+  const sortedIncidents = [...filteredIncidents].sort((a, b) => {
+    const severityOrder: Record<string, number> = {
+      minor: 1,
+      moderate: 2,
+      serious: 3,
+      critical: 4,
+      fatal: 5,
+    };
+
+    let comparison = 0;
+    switch (sortKey) {
+      case "title":
+        comparison = a.title.localeCompare(b.title, undefined, {
+          sensitivity: "base",
+        });
+        break;
+      case "incident_type":
+        comparison = a.incident_type.localeCompare(b.incident_type, undefined, {
+          sensitivity: "base",
+        });
+        break;
+      case "severity":
+        comparison =
+          (severityOrder[a.severity] || 0) - (severityOrder[b.severity] || 0);
+        break;
+      case "incident_date":
+        comparison =
+          new Date(a.incident_date).getTime() -
+          new Date(b.incident_date).getTime();
+        break;
+      case "investigation_status":
+        comparison = a.investigation_status.localeCompare(
+          b.investigation_status,
+          undefined,
+          { sensitivity: "base" }
+        );
+        break;
+      default:
+        comparison = 0;
+    }
+
+    return sortDirection === "asc" ? comparison : -comparison;
+  });
+
+  const sortIconFor = (key: IncidentSortKey) => {
+    if (sortKey !== key) return null;
+    return sortDirection === "asc" ? (
+      <ArrowUp className="w-3 h-3" />
+    ) : (
+      <ArrowDown className="w-3 h-3" />
+    );
+  };
 
   if (loading) {
     return (
@@ -922,6 +1025,102 @@ export default function Incidents() {
                 </form>
               </DialogContent>
             </Dialog>
+
+            <Dialog
+              open={Boolean(viewingIncident)}
+              onOpenChange={(open) => {
+                if (!open) setViewingIncident(null);
+              }}
+            >
+              <DialogContent className="max-w-2xl">
+                <DialogHeader>
+                  <DialogTitle>Incident Details</DialogTitle>
+                  <DialogDescription>
+                    Detailed information for this incident report.
+                  </DialogDescription>
+                </DialogHeader>
+
+                {viewingIncident && (
+                  <div className="space-y-4">
+                    <div className="grid grid-cols-2 gap-4 text-sm">
+                      <div>
+                        <p className="text-muted-foreground">Title</p>
+                        <p className="font-medium">{viewingIncident.title}</p>
+                      </div>
+                      <div>
+                        <p className="text-muted-foreground">Incident Number</p>
+                        <p className="font-medium">
+                          {viewingIncident.incident_number || "-"}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-muted-foreground">Type</p>
+                        <div>{getTypeBadge(viewingIncident.incident_type)}</div>
+                      </div>
+                      <div>
+                        <p className="text-muted-foreground">Severity</p>
+                        <div>{getSeverityBadge(viewingIncident.severity)}</div>
+                      </div>
+                      <div>
+                        <p className="text-muted-foreground">Date</p>
+                        <p className="font-medium">
+                          {format(new Date(viewingIncident.incident_date), "MMM dd, yyyy")}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-muted-foreground">Status</p>
+                        <div>
+                          {getStatusBadge(viewingIncident.investigation_status)}
+                        </div>
+                      </div>
+                      <div>
+                        <p className="text-muted-foreground">Location</p>
+                        <p className="font-medium">{viewingIncident.location || "-"}</p>
+                      </div>
+                      <div>
+                        <p className="text-muted-foreground">Department</p>
+                        <p className="font-medium">
+                          {viewingIncident.department?.name || "-"}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-muted-foreground">Affected Employee</p>
+                        <p className="font-medium">
+                          {viewingIncident.affected_employee?.full_name || "-"}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-muted-foreground">Reported By</p>
+                        <p className="font-medium">
+                          {viewingIncident.reported_by?.full_name || "-"}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div>
+                      <p className="text-sm text-muted-foreground mb-1">Description</p>
+                      <p className="text-sm border rounded-md p-3 bg-muted/20">
+                        {viewingIncident.description || "-"}
+                      </p>
+                    </div>
+
+                    <div>
+                      <p className="text-sm text-muted-foreground mb-1">Immediate Actions</p>
+                      <p className="text-sm border rounded-md p-3 bg-muted/20">
+                        {viewingIncident.immediate_actions || "-"}
+                      </p>
+                    </div>
+
+                    <div>
+                      <p className="text-sm text-muted-foreground mb-1">Root Cause</p>
+                      <p className="text-sm border rounded-md p-3 bg-muted/20">
+                        {viewingIncident.root_cause || "-"}
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </DialogContent>
+            </Dialog>
           </div>
         </CardHeader>
         <CardContent>
@@ -930,6 +1129,9 @@ export default function Incidents() {
               <Filter className="w-4 h-4 text-muted-foreground" />
               <span className="text-sm font-medium">Search & Filters</span>
             </div>
+            <p className="text-xs text-muted-foreground mb-3">
+              Tip: click a value in the Type, Severity, or Status column to filter quickly.
+            </p>
             <div className="flex items-center gap-4">
               <div className="relative flex-1">
                 <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-muted-foreground w-5 h-5" />
@@ -989,16 +1191,34 @@ export default function Incidents() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Title</TableHead>
+                  <TableHead>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      className="h-auto p-0 font-semibold"
+                      onClick={() => handleSort("title")}
+                    >
+                      Title {sortIconFor("title")}
+                    </Button>
+                  </TableHead>
                   <TableHead>Type</TableHead>
                   <TableHead>Severity</TableHead>
-                  <TableHead>Date</TableHead>
+                  <TableHead>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      className="h-auto p-0 font-semibold"
+                      onClick={() => handleSort("incident_date")}
+                    >
+                      Date {sortIconFor("incident_date")}
+                    </Button>
+                  </TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredIncidents.length === 0 ? (
+                {sortedIncidents.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={6} className="text-center py-12">
                       <div className="flex flex-col items-center justify-center">
@@ -1013,7 +1233,7 @@ export default function Incidents() {
                     </TableCell>
                   </TableRow>
                 ) : (
-                  filteredIncidents.map((incident) => (
+                  sortedIncidents.map((incident) => (
                     <TableRow
                       key={incident.id}
                       className="hover:bg-muted/70 transition-all duration-200 border-b border-border/50 hover:shadow-sm group"
@@ -1031,10 +1251,10 @@ export default function Incidents() {
                         </div>
                       </TableCell>
                       <TableCell>
-                        {getTypeBadge(incident.incident_type)}
+                        {getTypeBadge(incident.incident_type, true)}
                       </TableCell>
                       <TableCell>
-                        {getSeverityBadge(incident.severity)}
+                        {getSeverityBadge(incident.severity, true)}
                       </TableCell>
                       <TableCell>
                         {format(
@@ -1043,18 +1263,18 @@ export default function Incidents() {
                         )}
                       </TableCell>
                       <TableCell>
-                        <Badge
-                          variant={
-                            incident.investigation_status === "closed"
-                              ? "outline"
-                              : "default"
-                          }
-                        >
-                          {incident.investigation_status}
-                        </Badge>
+                        {getStatusBadge(incident.investigation_status, true)}
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex justify-end gap-2">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setViewingIncident(incident)}
+                            title="View details"
+                          >
+                            <Eye className="w-4 h-4" />
+                          </Button>
                           <Button
                             variant="ghost"
                             size="sm"

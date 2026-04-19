@@ -19,7 +19,17 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Search, Edit, FileDown, Calendar as CalendarIcon, Users, Trash2 } from "lucide-react";
+import {
+  Plus,
+  Search,
+  Edit,
+  FileDown,
+  Calendar as CalendarIcon,
+  Users,
+  Trash2,
+  ArrowUp,
+  ArrowDown,
+} from "lucide-react";
 import { Calendar } from "@/components/ui/calendar";
 import {
   Popover,
@@ -112,6 +122,15 @@ interface HealthCheckup {
 
 type ViewMode = "employee" | "date" | "checkup";
 
+type EmployeeHeaderKey = "first_name" | "last_name" | "g_code";
+type DateHeaderKey = "employee" | "g_code" | "due_date" | "appointment_date";
+type CheckupHeaderKey =
+  | "employee"
+  | "employee_number"
+  | "investigation_name"
+  | "appointment_date"
+  | "notes";
+
 export default function Investigations() {
   const { user, loading, companyId } = useAuth();
   const { t } = useLanguage();
@@ -133,6 +152,12 @@ export default function Investigations() {
   const [filterCheckUpType, setFilterCheckUpType] = useState<string>("all");
   const [filterDateFrom, setFilterDateFrom] = useState("");
   const [filterDateTo, setFilterDateTo] = useState("");
+  const [employeeHeaderKey, setEmployeeHeaderKey] = useState<EmployeeHeaderKey>("first_name");
+  const [employeeHeaderDirection, setEmployeeHeaderDirection] = useState<"asc" | "desc">("asc");
+  const [dateHeaderKey, setDateHeaderKey] = useState<DateHeaderKey>("due_date");
+  const [dateHeaderDirection, setDateHeaderDirection] = useState<"asc" | "desc">("desc");
+  const [checkupHeaderKey, setCheckupHeaderKey] = useState<CheckupHeaderKey>("appointment_date");
+  const [checkupHeaderDirection, setCheckupHeaderDirection] = useState<"asc" | "desc">("desc");
 
   // Dialog states
   const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -745,7 +770,7 @@ export default function Investigations() {
     }
   };
 
-  const getStatusBadge = (status: string) => {
+  const getStatusBadge = (status: string, clickable = false) => {
     const variants: Record<string, { className: string; labelKey: string }> = {
       due: {
         className: "bg-red-100 text-red-800",
@@ -761,7 +786,160 @@ export default function Investigations() {
       },
     };
     const config = variants[status] || variants.planned;
-    return <Badge className={config.className}>{t(config.labelKey)}</Badge>;
+    return (
+      <Badge
+        className={`${config.className} ${clickable ? "cursor-pointer hover:opacity-80" : ""}`}
+        onClick={
+          clickable
+            ? () =>
+              setFilterCheckUpType((prev) => (prev === status ? "all" : status))
+            : undefined
+        }
+        title={clickable ? "Click to filter by this status" : undefined}
+      >
+        {t(config.labelKey)}
+      </Badge>
+    );
+  };
+
+  const getCheckupStatusFilterValue = (status: string, completionDate?: string) => {
+    if (status === "done" || completionDate) return "completed";
+    if (status === "planned") return "planned";
+    return "open";
+  };
+
+  const getCheckupStatusBadge = (
+    status: string,
+    completionDate?: string,
+    clickable = false
+  ) => {
+    const filterValue = getCheckupStatusFilterValue(status, completionDate);
+
+    let className = "";
+    let label = "Open";
+    let variant: "outline" | "default" = "outline";
+
+    if (filterValue === "completed") {
+      className = "bg-green-500";
+      label = "Done";
+      variant = "default";
+    } else if (filterValue === "planned") {
+      className = "bg-blue-500";
+      label = "Planned";
+      variant = "default";
+    }
+
+    return (
+      <Badge
+        className={`${className} ${clickable ? "cursor-pointer hover:opacity-80" : ""}`.trim()}
+        variant={variant}
+        onClick={
+          clickable
+            ? () =>
+              setFilterCheckUpType((prev) =>
+                prev === filterValue ? "all" : filterValue
+              )
+            : undefined
+        }
+        title={clickable ? "Click to filter by this status" : undefined}
+      >
+        {label}
+      </Badge>
+    );
+  };
+
+  const getDepartmentBadge = (department?: string | null, clickable = false) => {
+    if (!department) return <span>—</span>;
+    return (
+      <Badge
+        variant="outline"
+        className={clickable ? "cursor-pointer hover:opacity-80" : ""}
+        onClick={
+          clickable
+            ? () =>
+              setFilterDepartment((prev) =>
+                prev === department ? "all" : department
+              )
+            : undefined
+        }
+        title={clickable ? "Click to filter by this department" : undefined}
+      >
+        {department}
+      </Badge>
+    );
+  };
+
+  const getGroupBadge = (group?: string | null, clickable = false) => {
+    if (!group) return <span>—</span>;
+    return (
+      <Badge
+        variant="secondary"
+        className={clickable ? "cursor-pointer hover:opacity-80" : ""}
+        onClick={
+          clickable
+            ? () => setFilterGroup((prev) => (prev === group ? "all" : group))
+            : undefined
+        }
+        title={clickable ? "Click to filter by this group" : undefined}
+      >
+        {group}
+      </Badge>
+    );
+  };
+
+  const compareText = (a?: string | null, b?: string | null) =>
+    (a || "").localeCompare(b || "", undefined, { sensitivity: "base" });
+
+  const compareDate = (a?: string | null, b?: string | null) => {
+    const aTime = a ? new Date(a).getTime() : 0;
+    const bTime = b ? new Date(b).getTime() : 0;
+    return aTime - bTime;
+  };
+
+  const splitEmployeeName = (fullName?: string) => {
+    const parts = (fullName || "").trim().split(" ").filter(Boolean);
+    if (parts.length === 0) return { firstName: "", lastName: "" };
+    if (parts.length === 1) return { firstName: parts[0], lastName: "" };
+    return {
+      firstName: parts.slice(0, -1).join(" "),
+      lastName: parts[parts.length - 1],
+    };
+  };
+
+  const handleEmployeeHeaderTap = (key: EmployeeHeaderKey) => {
+    if (employeeHeaderKey === key) {
+      setEmployeeHeaderDirection((prev) => (prev === "asc" ? "desc" : "asc"));
+    } else {
+      setEmployeeHeaderKey(key);
+      setEmployeeHeaderDirection("asc");
+    }
+  };
+
+  const handleDateHeaderTap = (key: DateHeaderKey) => {
+    if (dateHeaderKey === key) {
+      setDateHeaderDirection((prev) => (prev === "asc" ? "desc" : "asc"));
+    } else {
+      setDateHeaderKey(key);
+      setDateHeaderDirection("asc");
+    }
+  };
+
+  const handleCheckupHeaderTap = (key: CheckupHeaderKey) => {
+    if (checkupHeaderKey === key) {
+      setCheckupHeaderDirection((prev) => (prev === "asc" ? "desc" : "asc"));
+    } else {
+      setCheckupHeaderKey(key);
+      setCheckupHeaderDirection("asc");
+    }
+  };
+
+  const sortIcon = (active: boolean, direction: "asc" | "desc") => {
+    if (!active) return null;
+    return direction === "asc" ? (
+      <ArrowUp className="w-3 h-3" />
+    ) : (
+      <ArrowDown className="w-3 h-3" />
+    );
   };
 
   // Filter investigations for both views
@@ -892,7 +1070,151 @@ export default function Investigations() {
       );
     });
 
+  const sortedEmployeeRows = [...groupedByEmployeeFromCheckups].sort((a, b) => {
+    const aName = splitEmployeeName(a.employee.full_name);
+    const bName = splitEmployeeName(b.employee.full_name);
+
+    let comparison = 0;
+    switch (employeeHeaderKey) {
+      case "first_name":
+        comparison = compareText(aName.firstName, bName.firstName);
+        break;
+      case "last_name":
+        comparison = compareText(aName.lastName, bName.lastName);
+        break;
+      case "g_code":
+        comparison = compareText(a.investigationNames, b.investigationNames);
+        break;
+      default:
+        comparison = 0;
+    }
+
+    return employeeHeaderDirection === "asc" ? comparison : -comparison;
+  });
+
+  const filteredDateCheckups = healthCheckups.filter((checkup: any) => {
+    const matchesSearch =
+      !searchTerm ||
+      checkup.employee?.full_name
+        ?.toLowerCase()
+        .includes(searchTerm.toLowerCase()) ||
+      checkup.investigation_name
+        ?.toLowerCase()
+        .includes(searchTerm.toLowerCase());
+
+    const matchesDepartment =
+      filterDepartment === "all" ||
+      checkup.employee?.departments?.name === filterDepartment;
+
+    const matchesGroup =
+      filterGroup === "all" ||
+      checkup.employee?.exposure_groups?.name === filterGroup;
+
+    const matchesStatus =
+      filterCheckUpType === "all" ||
+      checkup.status === filterCheckUpType ||
+      (filterCheckUpType === "completed" && checkup.status === "done") ||
+      (filterCheckUpType === "planned" && checkup.status === "planned") ||
+      (filterCheckUpType === "open" && checkup.status === "open");
+
+    return matchesSearch && matchesDepartment && matchesGroup && matchesStatus;
+  });
+
+  const sortedDateRows = [...filteredDateCheckups].sort((a: any, b: any) => {
+    let comparison = 0;
+    switch (dateHeaderKey) {
+      case "employee":
+        comparison = compareText(a.employee?.full_name, b.employee?.full_name);
+        break;
+      case "g_code":
+        comparison = compareText(a.investigation_name, b.investigation_name);
+        break;
+      case "due_date":
+        comparison = compareDate(a.due_date, b.due_date);
+        break;
+      case "appointment_date":
+        comparison = compareDate(a.appointment_date, b.appointment_date);
+        break;
+      default:
+        comparison = 0;
+    }
+
+    return dateHeaderDirection === "asc" ? comparison : -comparison;
+  });
+
+  const filteredCheckupRows = healthCheckups.filter((checkup: any) => {
+    const matchesSearch =
+      checkup.employee?.full_name
+        ?.toLowerCase()
+        .includes(searchTerm.toLowerCase()) ||
+      checkup.employee?.employee_number
+        ?.toLowerCase()
+        .includes(searchTerm.toLowerCase()) ||
+      checkup.investigation_name
+        ?.toLowerCase()
+        .includes(searchTerm.toLowerCase());
+
+    const matchesDepartment =
+      filterDepartment === "all" ||
+      checkup.employee?.departments?.name === filterDepartment;
+
+    const matchesGroup =
+      filterGroup === "all" ||
+      checkup.employee?.exposure_groups?.name === filterGroup;
+
+    const matchesStatus =
+      filterCheckUpType === "all" ||
+      checkup.status === filterCheckUpType ||
+      (filterCheckUpType === "completed" && checkup.status === "done") ||
+      (filterCheckUpType === "planned" && checkup.status === "planned") ||
+      (filterCheckUpType === "open" && checkup.status === "open");
+
+    return matchesSearch && matchesDepartment && matchesGroup && matchesStatus;
+  });
+
+  const sortedCheckupRows = [...filteredCheckupRows].sort((a: any, b: any) => {
+    let comparison = 0;
+    switch (checkupHeaderKey) {
+      case "employee":
+        comparison = compareText(a.employee?.full_name, b.employee?.full_name);
+        break;
+      case "employee_number":
+        comparison = compareText(
+          a.employee?.employee_number,
+          b.employee?.employee_number
+        );
+        break;
+      case "investigation_name":
+        comparison = compareText(a.investigation_name, b.investigation_name);
+        break;
+      case "appointment_date":
+        comparison = compareDate(a.appointment_date, b.appointment_date);
+        break;
+      case "notes":
+        comparison = compareText(a.notes, b.notes);
+        break;
+      default:
+        comparison = 0;
+    }
+
+    return checkupHeaderDirection === "asc" ? comparison : -comparison;
+  });
+
   const exportToPDF = () => {
+    const hasExportData =
+      (viewMode === "employee" && sortedEmployeeRows.length > 0) ||
+      (viewMode === "date" && sortedDateRows.length > 0) ||
+      (viewMode === "checkup" && sortedCheckupRows.length > 0);
+
+    if (!hasExportData) {
+      toast({
+        title: t("common.error"),
+        description: "No data to export in the current view",
+        variant: "destructive",
+      });
+      return;
+    }
+
     const doc = new jsPDF();
     doc.setFontSize(18);
     doc.text(t("investigations.overview"), 14, 22);
@@ -904,13 +1226,22 @@ export default function Investigations() {
     );
 
     if (viewMode === "employee") {
-      const tableData = groupedByEmployee.map((item) => [
-        item.employee.full_name,
-        item.employee.employee_number,
-        item.employee.departments?.name || "—",
-        item.employee.exposure_groups?.name || "—",
-        item.gCodes,
-      ]);
+      const tableData = sortedEmployeeRows.map((item: any) => {
+        const nameParts = (item.employee.full_name || "").split(" ");
+        const lastName = nameParts[nameParts.length - 1] || "";
+        const firstName = nameParts.slice(0, -1).join(" ") || nameParts[0] || "";
+
+        return [
+          firstName,
+          lastName,
+          item.employee.departments?.name || "—",
+          item.employee.exposure_groups?.name || "—",
+          item.investigationNames || "—",
+          item.checkups
+            .map((c: any) => (c.status === "done" ? "Done" : c.status === "planned" ? "Planned" : "Open"))
+            .join(", "),
+        ];
+      });
 
       autoTable(doc, {
         head: [
@@ -920,6 +1251,37 @@ export default function Investigations() {
             t("common.department"),
             t("common.group"),
             t("investigations.gCode"),
+            t("common.status"),
+          ],
+        ],
+        body: tableData,
+        startY: 35,
+        styles: { fontSize: 9 },
+        headStyles: { fillColor: [37, 99, 235] },
+      });
+    } else if (viewMode === "date") {
+      const tableData = sortedDateRows.map((checkup: any) => [
+        checkup.employee?.full_name || "—",
+        checkup.investigation_name || "—",
+        checkup.due_date ? format(new Date(checkup.due_date), "dd.MM.yyyy") : "—",
+        checkup.appointment_date
+          ? format(new Date(checkup.appointment_date), "dd.MM.yyyy")
+          : "—",
+        checkup.employee?.departments?.name || "—",
+        checkup.employee?.exposure_groups?.name || "—",
+        checkup.status === "done" ? "Done" : checkup.status === "planned" ? "Planned" : "Open",
+      ]);
+
+      autoTable(doc, {
+        head: [
+          [
+            t("common.employee"),
+            t("investigations.gCode"),
+            "Due Date",
+            "Appointment Date",
+            t("common.department"),
+            t("common.group"),
+            t("common.status"),
           ],
         ],
         body: tableData,
@@ -928,26 +1290,30 @@ export default function Investigations() {
         headStyles: { fillColor: [37, 99, 235] },
       });
     } else {
-      const tableData = filteredInvestigations.map((inv) => [
-        inv.assigned_to?.full_name || "—",
-        inv.g_code || inv.investigation_id,
-        inv.due_date ? format(new Date(inv.due_date), "dd.MM.yyyy") : "—",
-        inv.appointment_date
-          ? format(new Date(inv.appointment_date), "dd.MM.yyyy")
+      const tableData = sortedCheckupRows.map((checkup: any) => [
+        checkup.employee?.full_name || "—",
+        checkup.employee?.employee_number || "—",
+        checkup.investigation_name || "—",
+        checkup.employee?.departments?.name || "—",
+        checkup.employee?.exposure_groups?.name || "—",
+        checkup.appointment_date
+          ? format(new Date(checkup.appointment_date), "dd.MM.yyyy")
           : "—",
-        inv.doctor || "—",
-        inv.status,
+        checkup.status === "done" ? "Done" : checkup.status === "planned" ? "Planned" : "Open",
+        checkup.notes || "—",
       ]);
 
       autoTable(doc, {
         head: [
           [
             t("common.employee"),
-            t("investigations.gCode"),
-            t("dueDate"),
-            t("appointmentDate"),
-            t("investigations.doctor"),
+            "Employee Number",
+            "Investigation Name",
+            t("common.department"),
+            t("common.group"),
+            "Appointment Date",
             t("common.status"),
+            "Notes",
           ],
         ],
         body: tableData,
@@ -1300,6 +1666,9 @@ export default function Investigations() {
 
           {/* Filters */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <p className="col-span-2 md:col-span-4 text-xs text-muted-foreground">
+              Tip: tap non-badge column headers to filter order, or click badges for status, department, and group filters.
+            </p>
             <div className="relative">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
               <Input
@@ -1420,10 +1789,38 @@ export default function Investigations() {
                 <TableHeader>
                   <TableRow>
 
-                    <TableHead>{t("common.firstName")}</TableHead>
-                    <TableHead>{t("common.lastName")}</TableHead>
+                    <TableHead>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        className="h-auto p-0 font-semibold"
+                        onClick={() => handleEmployeeHeaderTap("first_name")}
+                      >
+                        {t("common.firstName")} {sortIcon(employeeHeaderKey === "first_name", employeeHeaderDirection)}
+                      </Button>
+                    </TableHead>
+                    <TableHead>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        className="h-auto p-0 font-semibold"
+                        onClick={() => handleEmployeeHeaderTap("last_name")}
+                      >
+                        {t("common.lastName")} {sortIcon(employeeHeaderKey === "last_name", employeeHeaderDirection)}
+                      </Button>
+                    </TableHead>
                     <TableHead>{t("common.department")}</TableHead>
-                    <TableHead>{t("investigations.gCode")}</TableHead>
+                    <TableHead>{t("common.group")}</TableHead>
+                    <TableHead>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        className="h-auto p-0 font-semibold"
+                        onClick={() => handleEmployeeHeaderTap("g_code")}
+                      >
+                        {t("investigations.gCode")} {sortIcon(employeeHeaderKey === "g_code", employeeHeaderDirection)}
+                      </Button>
+                    </TableHead>
                     <TableHead>{t("common.status")}</TableHead>
                     <TableHead className="text-right">
                       {t("common.actions")}
@@ -1434,14 +1831,14 @@ export default function Investigations() {
                   {groupedByEmployeeFromCheckups.length === 0 ? (
                     <TableRow>
                       <TableCell
-                        colSpan={6}
+                        colSpan={7}
                         className="text-center py-8 text-muted-foreground"
                       >
                         {t("investigations.noInvestigations")}
                       </TableCell>
                     </TableRow>
                   ) : (
-                    groupedByEmployeeFromCheckups.map((item) => {
+                    sortedEmployeeRows.map((item) => {
                       const nameParts = item.employee.full_name.split(" ");
                       const lastName = nameParts[nameParts.length - 1];
                       const firstName = nameParts.slice(0, -1).join(" ");
@@ -1454,7 +1851,16 @@ export default function Investigations() {
                           </TableCell>
                           <TableCell>{lastName}</TableCell>
                           <TableCell>
-                            {item.employee.departments?.name || "—"}
+                            {getDepartmentBadge(
+                              item.employee.departments?.name,
+                              true
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            {getGroupBadge(
+                              item.employee.exposure_groups?.name,
+                              true
+                            )}
                           </TableCell>
                           <TableCell>
                             <div className="flex flex-wrap gap-1">
@@ -1471,16 +1877,13 @@ export default function Investigations() {
                           <TableCell>
                             <div className="flex flex-wrap gap-1">
                               {item.checkups.map((checkup: any) => (
-                                <Badge
-                                  key={checkup.id}
-                                  className={`text-xs ${checkup.status === "done" ? "bg-green-500" :
-                                    checkup.status === "planned" ? "bg-blue-500" : ""
-                                    }`}
-                                  variant={checkup.status === "open" ? "outline" : "default"}
-                                >
-                                  {checkup.status === "done" ? "Done" :
-                                    checkup.status === "planned" ? "Planned" : "Open"}
-                                </Badge>
+                                <span key={checkup.id}>
+                                  {getCheckupStatusBadge(
+                                    checkup.status,
+                                    checkup.completion_date,
+                                    true
+                                  )}
+                                </span>
                               ))}
                             </div>
                           </TableCell>
@@ -1508,10 +1911,48 @@ export default function Investigations() {
                 <TableHeader>
                   <TableRow>
 
-                    <TableHead>{t("common.employee")}</TableHead>
-                    <TableHead>{t("investigations.gCode")}</TableHead>
-                    <TableHead>Due Date</TableHead>
-                    <TableHead>Appointment Date</TableHead>
+                    <TableHead>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        className="h-auto p-0 font-semibold"
+                        onClick={() => handleDateHeaderTap("employee")}
+                      >
+                        {t("common.employee")} {sortIcon(dateHeaderKey === "employee", dateHeaderDirection)}
+                      </Button>
+                    </TableHead>
+                    <TableHead>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        className="h-auto p-0 font-semibold"
+                        onClick={() => handleDateHeaderTap("g_code")}
+                      >
+                        {t("investigations.gCode")} {sortIcon(dateHeaderKey === "g_code", dateHeaderDirection)}
+                      </Button>
+                    </TableHead>
+                    <TableHead>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        className="h-auto p-0 font-semibold"
+                        onClick={() => handleDateHeaderTap("due_date")}
+                      >
+                        Due Date {sortIcon(dateHeaderKey === "due_date", dateHeaderDirection)}
+                      </Button>
+                    </TableHead>
+                    <TableHead>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        className="h-auto p-0 font-semibold"
+                        onClick={() => handleDateHeaderTap("appointment_date")}
+                      >
+                        Appointment Date {sortIcon(dateHeaderKey === "appointment_date", dateHeaderDirection)}
+                      </Button>
+                    </TableHead>
+                    <TableHead>{t("common.department")}</TableHead>
+                    <TableHead>{t("common.group")}</TableHead>
                     <TableHead>{t("common.status")}</TableHead>
                     <TableHead className="text-right">
                       {t("common.actions")}
@@ -1519,43 +1960,17 @@ export default function Investigations() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {healthCheckups.filter((checkup: any) => {
-                    const matchesSearch = !searchTerm ||
-                      checkup.employee?.full_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                      checkup.investigation_name?.toLowerCase().includes(searchTerm.toLowerCase());
-                    const matchesDepartment = filterDepartment === "all" || checkup.employee?.departments?.name === filterDepartment;
-                    const matchesGroup = filterGroup === "all" || checkup.employee?.exposure_groups?.name === filterGroup;
-                    const matchesStatus = filterCheckUpType === "all" ||
-                      checkup.status === filterCheckUpType ||
-                      (filterCheckUpType === "completed" && checkup.status === "done") ||
-                      (filterCheckUpType === "planned" && checkup.status === "planned") ||
-                      (filterCheckUpType === "open" && checkup.status === "open");
-                    return matchesSearch && matchesDepartment && matchesGroup && matchesStatus;
-                  }).length === 0 ? (
+                  {sortedDateRows.length === 0 ? (
                     <TableRow>
                       <TableCell
-                        colSpan={6}
+                        colSpan={8}
                         className="text-center py-8 text-muted-foreground"
                       >
                         {t("investigations.noInvestigations")}
                       </TableCell>
                     </TableRow>
                   ) : (
-                    healthCheckups
-                      .filter((checkup: any) => {
-                        const matchesSearch = !searchTerm ||
-                          checkup.employee?.full_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                          checkup.investigation_name?.toLowerCase().includes(searchTerm.toLowerCase());
-                        const matchesDepartment = filterDepartment === "all" || checkup.employee?.departments?.name === filterDepartment;
-                        const matchesGroup = filterGroup === "all" || checkup.employee?.exposure_groups?.name === filterGroup;
-                        const matchesStatus = filterCheckUpType === "all" ||
-                          checkup.status === filterCheckUpType ||
-                          (filterCheckUpType === "completed" && checkup.status === "done") ||
-                          (filterCheckUpType === "planned" && checkup.status === "planned") ||
-                          (filterCheckUpType === "open" && checkup.status === "open");
-                        return matchesSearch && matchesDepartment && matchesGroup && matchesStatus;
-                      })
-                      .map((checkup: any) => (
+                    sortedDateRows.map((checkup: any) => (
                         <TableRow key={checkup.id}>
 
                           <TableCell className="font-medium">
@@ -1581,15 +1996,23 @@ export default function Investigations() {
                               : "—"}
                           </TableCell>
                           <TableCell>
-                            <Badge
-                              className={`text-xs ${checkup.status === "done" ? "bg-green-500" :
-                                checkup.status === "planned" ? "bg-blue-500" : ""
-                                }`}
-                              variant={checkup.status === "open" ? "outline" : "default"}
-                            >
-                              {checkup.status === "done" ? "Done" :
-                                checkup.status === "planned" ? "Planned" : "Open"}
-                            </Badge>
+                            {getDepartmentBadge(
+                              checkup.employee?.departments?.name,
+                              true
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            {getGroupBadge(
+                              checkup.employee?.exposure_groups?.name,
+                              true
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            {getCheckupStatusBadge(
+                              checkup.status,
+                              checkup.completion_date,
+                              true
+                            )}
                           </TableCell>
                           <TableCell className="text-right">
                             <Button
@@ -1612,85 +2035,76 @@ export default function Investigations() {
                 <TableHeader>
                   <TableRow>
 
-                    <TableHead>{t("common.employee")}</TableHead>
-                    <TableHead>Employee Number</TableHead>
-                    <TableHead>Investigation Name</TableHead>
+                    <TableHead>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        className="h-auto p-0 font-semibold"
+                        onClick={() => handleCheckupHeaderTap("employee")}
+                      >
+                        {t("common.employee")} {sortIcon(checkupHeaderKey === "employee", checkupHeaderDirection)}
+                      </Button>
+                    </TableHead>
+                    <TableHead>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        className="h-auto p-0 font-semibold"
+                        onClick={() => handleCheckupHeaderTap("employee_number")}
+                      >
+                        Employee Number {sortIcon(checkupHeaderKey === "employee_number", checkupHeaderDirection)}
+                      </Button>
+                    </TableHead>
+                    <TableHead>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        className="h-auto p-0 font-semibold"
+                        onClick={() => handleCheckupHeaderTap("investigation_name")}
+                      >
+                        Investigation Name {sortIcon(checkupHeaderKey === "investigation_name", checkupHeaderDirection)}
+                      </Button>
+                    </TableHead>
                     <TableHead>{t("common.department")}</TableHead>
-                    <TableHead>Appointment Date</TableHead>
+                    <TableHead>{t("common.group")}</TableHead>
+                    <TableHead>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        className="h-auto p-0 font-semibold"
+                        onClick={() => handleCheckupHeaderTap("appointment_date")}
+                      >
+                        Appointment Date {sortIcon(checkupHeaderKey === "appointment_date", checkupHeaderDirection)}
+                      </Button>
+                    </TableHead>
                     <TableHead>{t("common.status")}</TableHead>
-                    <TableHead>Notes</TableHead>
+                    <TableHead>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        className="h-auto p-0 font-semibold"
+                        onClick={() => handleCheckupHeaderTap("notes")}
+                      >
+                        Notes {sortIcon(checkupHeaderKey === "notes", checkupHeaderDirection)}
+                      </Button>
+                    </TableHead>
                     <TableHead className="text-right">
                       {t("common.actions")}
                     </TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {healthCheckups.length === 0 ? (
+                  {sortedCheckupRows.length === 0 ? (
                     <TableRow>
                       <TableCell
-                        colSpan={8}
+                        colSpan={9}
                         className="text-center py-8 text-muted-foreground"
                       >
                         No health checkups found
                       </TableCell>
                     </TableRow>
                   ) : (
-                    healthCheckups
-                      .filter((checkup: any) => {
-                        const matchesSearch =
-                          checkup.employee?.full_name
-                            ?.toLowerCase()
-                            .includes(searchTerm.toLowerCase()) ||
-                          checkup.employee?.employee_number
-                            ?.toLowerCase()
-                            .includes(searchTerm.toLowerCase()) ||
-                          checkup.investigation_name
-                            ?.toLowerCase()
-                            .includes(searchTerm.toLowerCase());
-
-                        const matchesDepartment =
-                          filterDepartment === "all" ||
-                          checkup.employee?.departments?.name ===
-                          filterDepartment;
-
-                        const matchesGroup =
-                          filterGroup === "all" ||
-                          checkup.employee?.exposure_groups?.name ===
-                          filterGroup;
-
-                        const matchesStatus =
-                          filterCheckUpType === "all" ||
-                          checkup.status === filterCheckUpType ||
-                          (filterCheckUpType === "completed" &&
-                            checkup.status === "done") ||
-                          (filterCheckUpType === "planned" &&
-                            checkup.status === "planned") ||
-                          (filterCheckUpType === "open" &&
-                            checkup.status === "open");
-
-                        return (
-                          matchesSearch &&
-                          matchesDepartment &&
-                          matchesGroup &&
-                          matchesStatus
-                        );
-                      })
-                      .map((checkup: any) => {
-                        const getCheckupStatusBadge = (
-                          status: string,
-                          completionDate?: string
-                        ) => {
-                          if (status === "done" || completionDate) {
-                            return <Badge className="bg-green-500">Done</Badge>;
-                          }
-                          if (status === "planned") {
-                            return (
-                              <Badge className="bg-blue-500">Planned</Badge>
-                            );
-                          }
-                          return <Badge variant="outline">Open</Badge>;
-                        };
-
+                    sortedCheckupRows.map((checkup: any) => {
                         return (
                           <TableRow key={checkup.id}>
 
@@ -1704,7 +2118,16 @@ export default function Investigations() {
                               {checkup.investigation_name || "—"}
                             </TableCell>
                             <TableCell>
-                              {checkup.employee?.departments?.name || "—"}
+                              {getDepartmentBadge(
+                                checkup.employee?.departments?.name,
+                                true
+                              )}
+                            </TableCell>
+                            <TableCell>
+                              {getGroupBadge(
+                                checkup.employee?.exposure_groups?.name,
+                                true
+                              )}
                             </TableCell>
                             <TableCell>
                               {checkup.appointment_date
@@ -1717,7 +2140,8 @@ export default function Investigations() {
                             <TableCell>
                               {getCheckupStatusBadge(
                                 checkup.status,
-                                checkup.completion_date
+                                checkup.completion_date,
+                                true
                               )}
                             </TableCell>
                             <TableCell className="max-w-xs truncate">
