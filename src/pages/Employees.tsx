@@ -146,6 +146,8 @@ export default function Employees() {
   // Import/Export states
   const [isImporting, setIsImporting] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
+  const [importErrors, setImportErrors] = useState<string[]>([]);
+  const [isImportGuideDialogOpen, setIsImportGuideDialogOpen] = useState(false);
 
   useEffect(() => {
     // Debug logging
@@ -704,6 +706,86 @@ export default function Employees() {
   };
 
   // Import handler
+  const normalizeHeader = (value: string) =>
+    value
+      .toLowerCase()
+      .trim()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/[^a-z0-9]/g, "");
+
+  const getCellValue = (row: Record<string, unknown>, aliases: string[]) => {
+    const normalizedAliases = aliases.map(normalizeHeader);
+    for (const key of Object.keys(row)) {
+      if (normalizedAliases.includes(normalizeHeader(key))) {
+        const value = row[key];
+        if (value === undefined || value === null) return null;
+        const text = String(value).trim();
+        return text.length > 0 ? text : null;
+      }
+    }
+    return null;
+  };
+
+  const convertImportedDate = (raw: unknown): string | null => {
+    if (!raw) return null;
+
+    if (typeof raw === "number" && Number.isFinite(raw)) {
+      const parsed = XLSX.SSF.parse_date_code(raw);
+      if (!parsed) return null;
+      const yyyy = String(parsed.y).padStart(4, "0");
+      const mm = String(parsed.m).padStart(2, "0");
+      const dd = String(parsed.d).padStart(2, "0");
+      return `${yyyy}-${mm}-${dd}`;
+    }
+
+    const text = String(raw).trim();
+    if (!text) return null;
+
+    if (/^\d{4}-\d{2}-\d{2}$/.test(text)) return text;
+
+    const dotFormat = text.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})$/);
+    if (dotFormat) {
+      const [, d, m, y] = dotFormat;
+      return `${y}-${m.padStart(2, "0")}-${d.padStart(2, "0")}`;
+    }
+
+    const slashFormat = text.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+    if (slashFormat) {
+      const [, d, m, y] = slashFormat;
+      return `${y}-${m.padStart(2, "0")}-${d.padStart(2, "0")}`;
+    }
+
+    const asDate = new Date(text);
+    if (!Number.isNaN(asDate.getTime())) {
+      return asDate.toISOString().split("T")[0];
+    }
+
+    return null;
+  };
+
+  const handleDownloadImportTemplate = () => {
+    const templateRows = [
+      {
+        employee_number: "2600125",
+        first_name: "Max",
+        last_name: "Mustermann",
+        email: "max.mustermann@example.com",
+        department: "Produktion",
+        hire_date: "2026-01-15",
+      },
+    ];
+
+    const worksheet = XLSX.utils.json_to_sheet(templateRows);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "EmployeesImportTemplate");
+    XLSX.writeFile(
+      workbook,
+      `employees_import_template_${new Date().toISOString().split("T")[0]}.xlsx`
+    );
+    toast.success("Import template downloaded");
+  };
+
   const handleImport = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
@@ -722,110 +804,132 @@ export default function Employees() {
     }
 
     setIsImporting(true);
+    setImportErrors([]);
     try {
       const data = await file.arrayBuffer();
       const workbook = XLSX.read(data);
       const worksheet = workbook.Sheets[workbook.SheetNames[0]];
-      const jsonData: any[] = XLSX.utils.sheet_to_json(worksheet);
+      const jsonData = XLSX.utils.sheet_to_json<Record<string, unknown>>(worksheet, {
+        defval: "",
+        raw: false,
+      });
 
       if (jsonData.length === 0) {
         toast.error(t("employees.noValidData"));
         return;
       }
 
-      // Debug: Log first row to see column names
-      console.log('First row of imported data:', jsonData[0]);
-      console.log('Column names:', Object.keys(jsonData[0]));
-
       let importedCount = 0;
       let skippedCount = 0;
+      const rowErrors: string[] = [];
 
-      for (const row of jsonData) {
-        // Helper function to get value case-insensitively
-        const getValue = (obj: any, possibleKeys: string[]) => {
-          for (const key of possibleKeys) {
-            // Try exact match first
-            if (obj[key]) return obj[key];
-            // Try case-insensitive match
-            const foundKey = Object.keys(obj).find(k => k.toLowerCase() === key.toLowerCase());
-            if (foundKey && obj[foundKey]) return obj[foundKey];
+      for (let index = 0; index < jsonData.length; index++) {
+        const row = jsonData[index] as Record<string, unknown>;
+        const rowNumber = index + 2;
+
+        const employeeNumber = getCellValue(row, [
+          "employee_number",
+          "Employee Number",
+          "employeeNumber",
+          "Mitarbeiternummer",
+          "Employee #",
+          "Emp #",
+        ]);
+        let firstName = getCellValue(row, [
+          "first_name",
+          "First Name",
+          "firstName",
+          "Vorname",
+          "First",
+        ]);
+        let lastName = getCellValue(row, [
+          "last_name",
+          "Last Name",
+          "lastName",
+          "Nachname",
+          "Last",
+        ]);
+
+        if (!firstName || !lastName) {
+          const fullName = getCellValue(row, ["full_name", "Full Name", "Name", "Mitarbeitername"]);
+          if (fullName) {
+            const parts = fullName.split(/\s+/).filter(Boolean);
+            if (parts.length > 1) {
+              firstName = parts.slice(0, -1).join(" ");
+              lastName = parts[parts.length - 1];
+            }
           }
-          return null;
-        };
+        }
 
-        // Validate required fields with flexible matching
-        const employeeNumber = getValue(row, ['employee_number', 'Employee Number', 'employeeNumber', 'Mitarbeiternummer', 'Employee #', 'Emp #']);
-        const firstName = getValue(row, ['first_name', 'First Name', 'firstName', 'Vorname', 'First']);
-        const lastName = getValue(row, ['last_name', 'Last Name', 'lastName', 'Nachname', 'Last']);
+        const rowProblems: string[] = [];
+        if (!employeeNumber) rowProblems.push("missing employee_number");
+        if (!firstName) rowProblems.push("missing first_name");
+        if (!lastName) rowProblems.push("missing last_name");
 
-        console.log('Processing row:', { employeeNumber, firstName, lastName });
-
-        if (!employeeNumber || !firstName || !lastName) {
-          console.warn('Skipping row - missing required fields:', row);
-          console.warn('Expected one of these column names:');
-          console.warn('  Employee Number: employee_number, Employee Number, employeeNumber, Mitarbeiternummer');
-          console.warn('  First Name: first_name, First Name, firstName, Vorname');
-          console.warn('  Last Name: last_name, Last Name, lastName, Nachname');
-          console.warn('Actual column names in this row:', Object.keys(row));
+        if (rowProblems.length > 0) {
+          rowErrors.push(`Row ${rowNumber}: ${rowProblems.join(", ")}`);
           skippedCount++;
           continue;
         }
 
-        // Helper to convert Excel serial date to ISO string (YYYY-MM-DD)
-        const convertExcelDate = (excelDate: any): string | null => {
-          if (!excelDate) return null;
-
-          // If it's already a string in date format, return it
-          if (typeof excelDate === 'string' && excelDate.match(/^\d{4}-\d{2}-\d{2}/)) {
-            return excelDate;
-          }
-
-          // If it's an Excel serial number, convert it
-          if (typeof excelDate === 'number') {
-            // Excel serial date (days since 1900-01-01, accounting for Excel's leap year bug)
-            const excelEpoch = new Date(1899, 11, 30); // December 30, 1899
-            const milliseconds = excelEpoch.getTime() + (excelDate * 24 * 60 * 60 * 1000);
-            const date = new Date(milliseconds);
-            return date.toISOString().split('T')[0]; // YYYY-MM-DD
-          }
-
-          return null;
-        };
-
         // Get and convert hire_date
-        const hireDateRaw = getValue(row, ['hire_date', 'Hire Date', 'hireDate', 'Einstellungsdatum', 'Start Date']);
-        const hireDate = convertExcelDate(hireDateRaw);
+        const hireDateRaw = getCellValue(row, [
+          "hire_date",
+          "Hire Date",
+          "hireDate",
+          "Einstellungsdatum",
+          "Start Date",
+        ]);
+        const hireDate = convertImportedDate(hireDateRaw);
+
+        if (hireDateRaw && !hireDate) {
+          rowErrors.push(`Row ${rowNumber}: invalid hire_date (${hireDateRaw})`);
+          skippedCount++;
+          continue;
+        }
 
         // Prepare employee data - match actual database schema
-        const employeeData: any = {
+        const employeeData: Record<string, unknown> = {
           company_id: companyId,
           employee_number: String(employeeNumber).trim(),
           full_name: `${String(firstName).trim()} ${String(lastName).trim()}`,
-          email: getValue(row, ['email', 'Email', 'E-Mail', 'e-mail', 'E-mail']) || null,
+          email: getCellValue(row, ["email", "Email", "E-Mail", "e-mail", "E-mail"]) || null,
           hire_date: hireDate,
           is_active: true,
         };
 
         // Handle department
-        const departmentName = getValue(row, ['department', 'Department', 'Abteilung', 'Dept']);
+        const departmentName = getCellValue(row, ["department", "Department", "Abteilung", "Dept"]);
         if (departmentName) {
-          // Try to find existing department
-          const { data: existingDept } = await supabase
+          const { data: existingDept, error: findDeptError } = await supabase
             .from('departments')
             .select('id')
             .eq('company_id', companyId)
             .ilike('name', String(departmentName).trim())
-            .single();
+            .maybeSingle();
+
+          if (findDeptError && findDeptError.code !== "PGRST116") {
+            rowErrors.push(`Row ${rowNumber}: could not validate department (${findDeptError.message})`);
+            skippedCount++;
+            continue;
+          }
 
           if (existingDept) {
             employeeData.department_id = existingDept.id;
           } else {
             // Create new department
-            const { data: newDept } = await supabase
+            const { data: newDept, error: deptInsertError } = await supabase
               .from('departments')
               .insert({ name: String(departmentName).trim(), company_id: companyId })
               .select('id')
               .single();
+
+            if (deptInsertError) {
+              rowErrors.push(`Row ${rowNumber}: could not create department (${deptInsertError.message})`);
+              skippedCount++;
+              continue;
+            }
+
             if (newDept) {
               employeeData.department_id = newDept.id;
             }
@@ -840,12 +944,12 @@ export default function Employees() {
         if (error) {
           // Check if it's a duplicate employee number
           if (error.code === '23505' && error.message.includes('employee_number')) {
-            console.warn(`Skipping duplicate employee: ${employeeNumber}`);
+            rowErrors.push(`Row ${rowNumber}: duplicate employee_number (${employeeNumber})`);
             skippedCount++;
             continue;
           }
 
-          console.error(`Error importing employee ${employeeNumber}:`, error);
+          rowErrors.push(`Row ${rowNumber}: ${error.message || "import failed"}`);
           skippedCount++;
         } else {
           importedCount++;
@@ -853,24 +957,23 @@ export default function Employees() {
         }
       }
 
-      // Show helpful message if all rows were skipped
+      setImportErrors(rowErrors);
+
       if (importedCount === 0 && skippedCount > 0) {
-        toast.error(
-          `${t("employees.importError")}: All ${skippedCount} rows skipped. Check browser console (F12) for details.`
-        );
-        console.error('❌ IMPORT FAILED - All rows skipped');
-        console.error('💡 Common reasons: duplicate employee numbers, missing required fields, or invalid data format');
+        toast.error(`${t("employees.importError")}: all ${skippedCount} rows skipped`);
         return;
       }
 
-      const message = importedCount > 0
-        ? `${t("employees.importSuccess")}: ${importedCount} employee${importedCount > 1 ? 's' : ''} imported`
-        : '';
-      const skipMessage = skippedCount > 0
-        ? ` (${skippedCount} skipped - likely duplicates)`
-        : '';
+      if (skippedCount > 0) {
+        toast.success(
+          `${t("employees.importSuccess")}: ${importedCount} imported, ${skippedCount} skipped. See import details below.`
+        );
+      } else {
+        toast.success(
+          `${t("employees.importSuccess")}: ${importedCount} employee${importedCount > 1 ? "s" : ""} imported`
+        );
+      }
 
-      toast.success(message + skipMessage);
       fetchEmployees(); // Refresh the list
     } catch (error) {
       console.error('Import error:', error);
@@ -1455,7 +1558,7 @@ export default function Employees() {
                   <Button
                     type="button"
                     variant="default"
-                    onClick={() => document.getElementById('import-employees')?.click()}
+                    onClick={() => setIsImportGuideDialogOpen(true)}
                     disabled={isImporting}
                     className="gap-2"
                   >
@@ -1503,6 +1606,81 @@ export default function Employees() {
                 </div>
               </div>
             </div>
+
+            <Dialog
+              open={isImportGuideDialogOpen}
+              onOpenChange={setIsImportGuideDialogOpen}
+            >
+              <DialogContent className="max-w-xl">
+                <DialogHeader>
+                  <DialogTitle>Employee import requirements</DialogTitle>
+                  <DialogDescription>
+                    Review the format once, then continue to choose your file.
+                  </DialogDescription>
+                </DialogHeader>
+
+                <div className="text-sm space-y-2">
+                  <p>Accepted file formats: .xlsx, .xls, .csv</p>
+                  <p>Required columns: employee_number, first_name, last_name</p>
+                  <p>
+                    Optional columns: email, department, hire_date
+                    (YYYY-MM-DD, DD.MM.YYYY, DD/MM/YYYY, or Excel date)
+                  </p>
+                  <p>
+                    Header aliases are accepted (for example:
+                    Mitarbeiternummer, Vorname, Nachname, Abteilung,
+                    Einstellungsdatum).
+                  </p>
+                  <p>
+                    Need a sample file?{" "}
+                    <a
+                      href="#"
+                      className="text-primary underline underline-offset-4"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        handleDownloadImportTemplate();
+                      }}
+                    >
+                      Download template
+                    </a>
+                  </p>
+                </div>
+
+                <DialogFooter>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setIsImportGuideDialogOpen(false)}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    type="button"
+                    onClick={() => {
+                      setIsImportGuideDialogOpen(false);
+                      document.getElementById("import-employees")?.click();
+                    }}
+                  >
+                    Continue to file selection
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+
+            {importErrors.length > 0 && (
+              <div className="mb-4 p-4 rounded-xl border border-destructive/30 bg-destructive/5 text-sm space-y-2">
+                <p className="font-medium text-destructive">
+                  Import issues ({importErrors.length})
+                </p>
+                <div className="max-h-48 overflow-auto space-y-1 pr-1">
+                  {importErrors.map((issue, idx) => (
+                    <p key={idx} className="text-muted-foreground">
+                      {issue}
+                    </p>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {/* Search Bar */}
             <div className="mb-6">
