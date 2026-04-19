@@ -15,6 +15,7 @@ import {
   Link,
   FileArchive,
   FolderOpen,
+  Users,
 } from "lucide-react";
 import LessonCard from "@/components/training/LessonCard";
 import { Button } from "@/components/ui/button";
@@ -30,10 +31,12 @@ import { Textarea } from "@/components/ui/textarea";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import { Checkbox } from "@/components/ui/checkbox";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useForm } from "react-hook-form";
@@ -73,6 +76,12 @@ interface Lesson {
   status: "draft" | "published";
 }
 
+interface Employee {
+  id: string;
+  full_name: string;
+  employee_number?: string | null;
+}
+
 export default function Training() {
   const { courseId: urlCourseId } = useParams<{ courseId?: string }>();
   const { user, loading, companyId } = useAuth();
@@ -83,8 +92,14 @@ export default function Training() {
   const [courses, setCourses] = useState<Course[]>([]);
   const [selectedCourse, setSelectedCourse] = useState<Course | null>(null);
   const [lessons, setLessons] = useState<Lesson[]>([]);
+  const [employees, setEmployees] = useState<Employee[]>([]);
+  const [courseAccessByCourse, setCourseAccessByCourse] = useState<Record<string, string[]>>({});
   const [searchTerm, setSearchTerm] = useState("");
   const [isCourseDialogOpen, setIsCourseDialogOpen] = useState(false);
+  const [isAccessDialogOpen, setIsAccessDialogOpen] = useState(false);
+  const [managingAccessCourse, setManagingAccessCourse] = useState<Course | null>(null);
+  const [selectedEmployeeIds, setSelectedEmployeeIds] = useState<Set<string>>(new Set());
+  const [savingAccess, setSavingAccess] = useState(false);
   const [loadingData, setLoadingData] = useState(false);
 
   const courseForm = useForm<CourseFormData>({
@@ -101,6 +116,8 @@ export default function Training() {
     }
     if (user && companyId) {
       fetchCourses();
+      fetchEmployees();
+      fetchCourseAccess();
     }
   }, [user, loading, navigate, companyId]);
 
@@ -159,6 +176,122 @@ export default function Training() {
         description: err.message,
         variant: "destructive",
       });
+    }
+  };
+
+  const fetchEmployees = async () => {
+    if (!companyId) return;
+
+    try {
+      const { data, error } = await supabase
+        .from("employees")
+        .select("id, full_name, employee_number")
+        .eq("company_id", companyId)
+        .eq("is_active", true)
+        .order("full_name");
+
+      if (error) throw error;
+      setEmployees((data as Employee[]) || []);
+    } catch (err: any) {
+      toast({
+        title: "Error loading employees",
+        description: err.message,
+        variant: "destructive",
+      });
+    }
+  };
+
+  const fetchCourseAccess = async () => {
+    if (!companyId) return;
+
+    try {
+      const { data, error } = await (supabase as any)
+        .from("course_employee_access")
+        .select("course_id, employee_id")
+        .eq("company_id", companyId);
+
+      if (error) throw error;
+
+      const mapped: Record<string, string[]> = {};
+      (data || []).forEach((row: any) => {
+        if (!mapped[row.course_id]) mapped[row.course_id] = [];
+        mapped[row.course_id].push(row.employee_id);
+      });
+
+      setCourseAccessByCourse(mapped);
+    } catch (err: any) {
+      toast({
+        title: "Error loading course access",
+        description: err.message,
+        variant: "destructive",
+      });
+    }
+  };
+
+  const openAccessDialog = (course: Course) => {
+    setManagingAccessCourse(course);
+    setSelectedEmployeeIds(new Set(courseAccessByCourse[course.id] || []));
+    setIsAccessDialogOpen(true);
+  };
+
+  const toggleEmployeeAccess = (employeeId: string, checked: boolean) => {
+    setSelectedEmployeeIds((prev) => {
+      const next = new Set(prev);
+      if (checked) {
+        next.add(employeeId);
+      } else {
+        next.delete(employeeId);
+      }
+      return next;
+    });
+  };
+
+  const saveCourseAccess = async () => {
+    if (!companyId || !managingAccessCourse) return;
+
+    setSavingAccess(true);
+    try {
+      const { error: deleteError } = await (supabase as any)
+        .from("course_employee_access")
+        .delete()
+        .eq("course_id", managingAccessCourse.id)
+        .eq("company_id", companyId);
+
+      if (deleteError) throw deleteError;
+
+      const employeeIds = Array.from(selectedEmployeeIds);
+      if (employeeIds.length > 0) {
+        const rows = employeeIds.map((employeeId) => ({
+          company_id: companyId,
+          course_id: managingAccessCourse.id,
+          employee_id: employeeId,
+          assigned_by: user?.id || null,
+        }));
+
+        const { error: insertError } = await (supabase as any)
+          .from("course_employee_access")
+          .insert(rows);
+
+        if (insertError) throw insertError;
+      }
+
+      toast({
+        title: "Success",
+        description: "Course access updated successfully",
+      });
+
+      setIsAccessDialogOpen(false);
+      setManagingAccessCourse(null);
+      setSelectedEmployeeIds(new Set());
+      fetchCourseAccess();
+    } catch (err: any) {
+      toast({
+        title: "Error updating access",
+        description: err.message,
+        variant: "destructive",
+      });
+    } finally {
+      setSavingAccess(false);
     }
   };
 
@@ -357,6 +490,80 @@ export default function Training() {
     course.name.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
+  const renderAccessDialog = () => (
+    <Dialog
+      open={isAccessDialogOpen}
+      onOpenChange={(open) => {
+        setIsAccessDialogOpen(open);
+        if (!open) {
+          setManagingAccessCourse(null);
+          setSelectedEmployeeIds(new Set());
+        }
+      }}
+    >
+      <DialogContent className="max-w-2xl">
+        <DialogHeader>
+          <DialogTitle>
+            Manage Employee Access
+          </DialogTitle>
+          <DialogDescription>
+            {managingAccessCourse
+              ? `Grant or remove access for ${managingAccessCourse.name}.`
+              : "Grant or remove employee course access."}
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="max-h-[420px] overflow-y-auto border rounded-md p-3 space-y-2">
+          {employees.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No active employees found.</p>
+          ) : (
+            employees.map((employee) => {
+              const checked = selectedEmployeeIds.has(employee.id);
+              return (
+                <label
+                  key={employee.id}
+                  className="flex items-center justify-between gap-3 p-2 rounded hover:bg-muted/50 cursor-pointer"
+                >
+                  <div>
+                    <p className="text-sm font-medium">{employee.full_name}</p>
+                    {employee.employee_number && (
+                      <p className="text-xs text-muted-foreground">
+                        Employee No: {employee.employee_number}
+                      </p>
+                    )}
+                  </div>
+                  <Checkbox
+                    checked={checked}
+                    onCheckedChange={(value) =>
+                      toggleEmployeeAccess(employee.id, Boolean(value))
+                    }
+                  />
+                </label>
+              );
+            })
+          )}
+        </div>
+
+        <div className="flex justify-end gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => {
+              setIsAccessDialogOpen(false);
+              setManagingAccessCourse(null);
+              setSelectedEmployeeIds(new Set());
+            }}
+          >
+            {t("common.cancel")}
+          </Button>
+          <Button onClick={saveCourseAccess} disabled={savingAccess}>
+            {savingAccess ? "Saving..." : "Save Access"}
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+
   if (loading || loadingData) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
@@ -400,6 +607,13 @@ export default function Training() {
                   </CardDescription>
                 </div>
                 <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    onClick={() => openAccessDialog(selectedCourse)}
+                  >
+                    <Users className="w-4 h-4 mr-2" />
+                    Manage Access
+                  </Button>
                   <Button onClick={() => navigate(`/training/${selectedCourse.id}/lesson/new`)}>
                     <Plus className="w-4 h-4 mr-2" />
                     {t("training.addLesson")}
@@ -433,6 +647,7 @@ export default function Training() {
               )}
             </CardContent>
           </Card>
+          {renderAccessDialog()}
         </main>
       </div>
     );
@@ -597,16 +812,32 @@ export default function Training() {
                             {course.description}
                           </p>
                         )}
+                        <p className="text-xs text-muted-foreground mt-1">
+                          {courseAccessByCourse[course.id]?.length || 0} employees with access
+                        </p>
                       </div>
 
-                      {/* Delete Button - Always Visible */}
-                      <button
-                        onClick={(e) => onCourseDelete(course.id, course.name, e)}
-                        className="p-2 rounded-lg bg-destructive/10 hover:bg-destructive hover:text-destructive-foreground text-destructive transition-all flex-shrink-0"
-                        title="Delete course"
-                      >
-                        <Trash2 className="w-5 h-5" />
-                      </button>
+                      <div className="flex items-center gap-1">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            openAccessDialog(course);
+                          }}
+                          className="p-2 rounded-lg bg-primary/10 hover:bg-primary hover:text-primary-foreground text-primary transition-all flex-shrink-0"
+                          title="Manage employee access"
+                        >
+                          <Users className="w-5 h-5" />
+                        </button>
+
+                        {/* Delete Button - Always Visible */}
+                        <button
+                          onClick={(e) => onCourseDelete(course.id, course.name, e)}
+                          className="p-2 rounded-lg bg-destructive/10 hover:bg-destructive hover:text-destructive-foreground text-destructive transition-all flex-shrink-0"
+                          title="Delete course"
+                        >
+                          <Trash2 className="w-5 h-5" />
+                        </button>
+                      </div>
                     </div>
                   </div>
                 ))}
@@ -614,6 +845,8 @@ export default function Training() {
             )}
           </CardContent>
         </Card>
+
+        {renderAccessDialog()}
       </main>
     </div>
   );
