@@ -639,7 +639,7 @@ const Index = () => {
                   <div className="p-4 bg-white rounded-lg border border-gray-200 hover:shadow-md transition-shadow">
                     <div className="flex items-start justify-between mb-2">
                       <h4 className="font-semibold text-gray-900">
-                        Erfolgreiche Einrichtung
+                        Setup gemeistert
                       </h4>
                       <Badge variant="secondary">149€ einmalig</Badge>
                     </div>
