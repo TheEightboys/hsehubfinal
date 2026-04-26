@@ -130,7 +130,7 @@ const Index = () => {
     {
       name: "Paket S",
       subtitle: "HSE Basic – Der digitale Einstieg",
-      price: "29.99€",
+      price: "149€",
       period: "Monat",
       description:
         "Für kleine Unternehmen, die ihre Arbeitsschutzverwaltung erstmals digitalisieren möchten.",
@@ -151,7 +151,7 @@ const Index = () => {
     {
       name: "Paket M",
       subtitle: "HSE Pro – Strukturierte Teamarbeit",
-      price: "79.99€",
+      price: "249€",
       period: "Monat",
       description: "Für KMU, die Prozesse, Rollen und Nachvollziehbarkeit benötigen.",
       users: "10 Benutzer (1 Administrator + 9 Benutzer)",
@@ -169,7 +169,7 @@ const Index = () => {
     {
       name: "Paket L",
       subtitle: "HSE Enterprise – Für mittelständische Unternehmen und Konzerne",
-      price: "149€",
+      price: "349€",
       period: "Monat",
       description: "Alle fachlichen HSE-Funktionen auf Organisationsebene.",
       users: "Kein Limit",
@@ -310,7 +310,7 @@ const Index = () => {
               <span>Keine Kreditkarte erforderlich</span>
               <span className="text-gray-300">•</span>
               <Check className="h-5 w-5 text-green-600" />
-              <span>14-Tage testen</span>
+              <span>7-Tage testen</span>
               <span className="text-gray-300">•</span>
               <Check className="h-5 w-5 text-green-600" />
               <span>Jederzeit kündbar</span>
@@ -706,7 +706,7 @@ const Index = () => {
             </Card>
             <div className="text-center mt-6">
               <p className="text-sm text-gray-600">
-                Keine Kreditkarte erforderlich • 14-Tage testen • Jederzeit kündbar
+                Keine Kreditkarte erforderlich • 7-Tage testen • Jederzeit kündbar
               </p>
             </div>
           </div>
@@ -756,7 +756,7 @@ const Index = () => {
               <div className="flex flex-wrap items-center justify-center gap-8 pt-8 text-white/90">
                 <div className="flex items-center gap-2">
                   <Check className="h-5 w-5" />
-                  <span>14-Tage testen</span>
+                  <span>7-Tage testen</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <Check className="h-5 w-5" />
